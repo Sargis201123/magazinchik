@@ -2,25 +2,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { emptyDayStats, newGame, type StoreState } from '../src/game/economy';
 import {
   buyStand,
-  DEPOSIT_IDS,
-  DEPOSITS,
-  ITEM_COST,
   KIT_PRICE,
-  RENTAL_CAP,
+  RENT_SHARE,
+  RENTAL_CAPS,
   RENTAL_FROM_DAY,
   RENTAL_FROM_LEVEL,
+  rentalCap,
   rentalDay,
   rentalDemand,
   rentalKit,
   kitToday,
+  rentalLog,
   rentalLook,
   rentalNight,
   rentalOf,
   rentalOpen,
-  restockRental,
-  setDeposit,
   STAND_COST,
-  type Deposit,
 } from '../src/game/rental';
 import { guestsToday, nightCycle } from '../src/game/day';
 import { weatherFor } from '../src/game/weather';
@@ -29,10 +26,11 @@ import { pendingTip, TIP_ICONS, type TipId } from '../src/game/tips';
 import { ru } from '../src/i18n/ru';
 import { simulate } from '../src/game/simulate';
 
-// Прокат у входа (rental.ts, 13.11): стойка, набор по погоде, деньги вечером, залог и пропавшие вещи.
+// Прокат у входа (rental.ts): стойка, набор по погоде, деньги вечером. 27.11: без залога, пропаж и докупки -
+// стойка растёт с магазином сама, цена проката за день видна в карточке.
 
 const shop = (over: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 40, level: 2, money: 5000, debt: 0, rating: 4, seed: 7, ...over });
-const rented = (deposit: Deposit = 'medium', over: Partial<StoreState> = {}): StoreState => shop({ rental: { stock: RENTAL_CAP, deposit }, ...over });
+const rented = (over: Partial<StoreState> = {}): StoreState => shop({ rental: {}, ...over });
 /** Первый день после day, когда погода такая (для набора и спроса). */
 const dayWhen = (ok: (day: number) => boolean, from = 20): number => {
   for (let d = from; d < from + 400; d++) if (ok(d)) return d;
@@ -47,33 +45,21 @@ describe('прокат: стойка', () => {
     expect(buyStand(shop({ day: RENTAL_FROM_DAY - 1 }))).toBeNull();
   });
 
-  it('стойку покупают один раз — сразу с полным набором и средним залогом', () => {
+  it('стойку покупают один раз — и всё: ни залога, ни запаса вещей', () => {
     const before = shop();
     const after = buyStand(before)!;
     expect(after.money).toBe(before.money - STAND_COST);
-    expect(after.rental).toEqual({ stock: RENTAL_CAP, deposit: 'medium' });
+    expect(after.rental).toEqual({});
+    expect(rentalOf(after)).toEqual({});
     expect(buyStand(after)).toBeNull();
     expect(buyStand(shop({ money: STAND_COST - 1 }))).toBeNull();
   });
 
-  it('докупка: сколько не хватает и сколько по карману', () => {
-    const s = shop({ rental: { stock: 4, deposit: 'small' } });
-    const full = restockRental(s, 99)!;
-    expect(full.rental!.stock).toBe(RENTAL_CAP);
-    expect(full.money).toBe(s.money - (RENTAL_CAP - 4) * ITEM_COST);
-    const poor = restockRental({ ...s, money: ITEM_COST * 2 + 5 }, 99)!;
-    expect(poor.rental!.stock).toBe(6);
-    expect(poor.money).toBe(5);
-    expect(restockRental(rented(), 1)).toBeNull();
-    expect(restockRental(shop(), 1)).toBeNull();
-    expect(restockRental({ ...s, money: ITEM_COST - 1 }, 1)).toBeNull();
-  });
-
-  it('залог меняется только на другой и только у стойки', () => {
-    expect(setDeposit(rented('medium'), 'large')!.rental!.deposit).toBe('large');
-    expect(setDeposit(rented('medium'), 'medium')).toBeNull();
-    expect(setDeposit(shop(), 'small')).toBeNull();
-    expect(setDeposit(rented(), 'huge' as Deposit)).toBeNull();
+  it('стойка растёт с магазином: 10 / 15 / 20 / 30 / 40 вещей', () => {
+    expect([1, 2, 3, 4, 5].map((level) => rentalCap(rented({ level })))).toEqual([10, 15, 20, 30, 40]);
+    expect(RENTAL_CAPS).toHaveLength(6);
+    // В Заречье — по помещению Центра.
+    expect(rentalCap(rented({ level: 1, zar: { at: 'zar', away: { level: 4 } } as unknown as StoreState['zar'] }))).toBe(30);
   });
 });
 
@@ -99,7 +85,7 @@ describe('прокат: набор и спрос по погоде', () => {
 
   it('беда района меняет набор: в буран — санки, в паводок — зонты, и спрос вслед за погодой', () => {
     const summer = dayWhen((d) => yearTime(d) === 'summer' && weatherFor(d) === 'clear');
-    const calm = rented('medium', { day: summer });
+    const calm = rented({ day: summer });
     const flood = { ...calm, crisis: { kind: 'flood' as const, from: summer, days: 3 } };
     const blizzard = { ...calm, crisis: { kind: 'blizzard' as const, from: summer, days: 3 } };
     expect(kitToday(calm)).toBe('wheels');
@@ -107,28 +93,36 @@ describe('прокат: набор и спрос по погоде', () => {
     expect(kitToday(blizzard)).toBe('winter');
     expect(rentalDay(flood, 100)!.kit).toBe('rain');
     // Зонтов в ливень паводка берут больше, чем колёс в ясный день (прохожих столько же).
-    expect(rentalDay({ ...flood, rental: { stock: RENTAL_CAP, deposit: 'medium' } }, 60)!.rented).toBeGreaterThanOrEqual(rentalDay(calm, 60)!.rented);
+    expect(rentalDay(flood, 60)!.rented).toBeGreaterThanOrEqual(rentalDay(calm, 60)!.rented);
   });
 });
 
 describe('прокат: день', () => {
   it('одинаковое зерно и день — одинаковый итог; другой день — свой', () => {
-    const s = rented('small');
+    const s = rented();
     expect(rentalDay(s, 80)).toEqual(rentalDay({ ...s }, 80));
     const days = Array.from({ length: 30 }, (_, i) => JSON.stringify(rentalDay({ ...s, day: 40 + i }, 80)));
     expect(new Set(days).size).toBeGreaterThan(5);
   });
 
   it('берут не больше, чем вещей на стойке; без стойки и в Заречье — ничего', () => {
-    const s = shop({ rental: { stock: 3, deposit: 'small' } });
-    for (let d = 20; d < 80; d++) expect(rentalDay({ ...s, day: d }, 500)!.rented).toBeLessThanOrEqual(3);
-    expect(rentalDay(shop({ rental: { stock: 0, deposit: 'small' } }), 500)!.rented).toBe(0);
+    for (const level of [1, 3, 5]) {
+      const s = rented({ level });
+      let full = 0;
+      for (let d = 20; d < 80; d++) {
+        const day = rentalDay({ ...s, day: d }, 2000)!;
+        expect(day.rented).toBeLessThanOrEqual(rentalCap(s));
+        if (day.rented === rentalCap(s)) full++;
+      }
+      // Прохожих много — стойку разбирают всю.
+      expect(full).toBeGreaterThan(40);
+    }
     expect(rentalDay(shop(), 100)).toBeNull();
-    expect(rentalDay(rented('medium', { zar: { at: 'zar' } as StoreState['zar'] }), 100)).toBeNull();
+    expect(rentalDay(rented({ zar: { at: 'zar' } as StoreState['zar'] }), 100)).toBeNull();
   });
 
   it('прохожих больше — берут больше', () => {
-    const s = rented();
+    const s = rented({ level: 5 });
     let few = 0;
     let many = 0;
     for (let d = 20; d < 120; d++) {
@@ -138,62 +132,40 @@ describe('прокат: день', () => {
     expect(many).toBeGreaterThan(few * 1.8);
   });
 
-  it('деньги: прокат по цене набора плюс залоги за невернувшиеся вещи', () => {
+  it('деньги: взятые вещи × цена набора (25 / 30 / 12), без залогов и пропаж', () => {
+    expect(KIT_PRICE).toEqual({ winter: 25, wheels: 30, rain: 12 });
     for (let d = 20; d < 120; d++) {
-      const day = rentalDay(rented('small', { day: d }), 120)!;
-      expect(day.kept).toBe(day.lost * DEPOSITS.small.sum);
-      expect(day.income).toBe(day.rented * KIT_PRICE[day.kit] + day.kept);
-      expect(day.lost).toBeLessThanOrEqual(day.rented);
+      const day = rentalDay(rented({ day: d }), 120)!;
+      expect(day.income).toBe(day.rented * KIT_PRICE[day.kit]);
+      expect(Object.keys(day).sort()).toEqual(['income', 'kit', 'rented']);
     }
   });
 
-  it('маленький залог — берут чаще и теряют чаще; большой — реже и почти без потерь', () => {
-    const total = (deposit: Deposit) => {
-      let n = 0;
-      let lost = 0;
-      for (let d = 20; d < 220; d++) {
-        const day = rentalDay(rented(deposit, { day: d }), 50)!;
-        n += day.rented;
-        lost += day.lost;
-      }
-      return { n, lost };
-    };
-    const [small, medium, large] = DEPOSIT_IDS.map(total);
-    expect(small.n).toBeGreaterThan(medium.n);
-    expect(medium.n).toBeGreaterThan(large.n);
-    expect(small.lost).toBeGreaterThan(medium.lost);
-    expect(medium.lost).toBeGreaterThanOrEqual(large.lost);
-    expect(small.lost / small.n).toBeGreaterThan(0.06);
-    expect(large.lost / large.n).toBeLessThan(0.03);
-  });
-
-  it('когда желающих больше, чем вещей, большой залог выгоднее маленького (с докупкой пропавшего)', () => {
-    const net = (deposit: Deposit) => {
-      let sum = 0;
-      for (let d = 20; d < 220; d++) {
-        const day = rentalDay(rented(deposit, { day: d }), 400)!;
-        sum += day.income - day.lost * ITEM_COST;
-      }
-      return sum;
-    };
-    expect(net('large')).toBeGreaterThan(net('small'));
+  it('в Универмаге стойка больше — и денег заметно больше, чем у стойки на 10 вещей', () => {
+    // Прохожие Универмага (~200 гостей дня): желающих ~20 при обычном спросе — раньше стойка на 10 упиралась в предел.
+    let big = 0;
+    let small = 0;
+    for (let d = 20; d < 385; d++) {
+      big += rentalDay(rented({ level: 4, day: d }), 210)!.income;
+      small += rentalDay(rented({ level: 1, day: d }), 210)!.income;
+    }
+    expect(big / 365).toBeGreaterThan(450);
+    expect(big).toBeGreaterThan(small * 1.6);
+    expect(RENT_SHARE).toBe(0.1);
   });
 });
 
 describe('прокат: вечер', () => {
-  it('деньги — в кассу, пропавшие — со стойки, итог дня — в карточку', () => {
-    const d = dayWhen((day) => {
-      const r = rentalDay(rented('small', { day }), 150);
-      return Boolean(r && r.lost > 0);
-    }, RENTAL_FROM_DAY);
-    const s = rented('small', { day: d });
+  it('деньги — в кассу, итог дня — в карточку («вчера» и «всего»)', () => {
+    const s = rented({ day: 50 });
     const plan = rentalDay(s, 150)!;
     const { state, day } = rentalNight(s, 150);
     expect(day).toEqual(plan);
     expect(state.money).toBe(s.money + plan.income);
-    expect(state.rental!.stock).toBe(RENTAL_CAP - plan.lost);
-    expect(state.rental!.last).toEqual({ ...plan, day: d });
-    expect(state.rental!.earned).toBe(plan.income);
+    expect(state.rental).toEqual({ last: { ...plan, day: 50 }, earned: plan.income });
+    const next = rentalNight({ ...state, day: 51 }, 150).state;
+    expect(rentalLog({ ...next, day: 52 })).toEqual({ n: next.rental!.last!.rented, last: next.rental!.last!.income, total: next.rental!.earned });
+    expect(rentalLog({ ...next, day: 55 })).toBeNull();
   });
 
   it('без стойки вечер ничего не меняет', () => {
@@ -202,11 +174,11 @@ describe('прокат: вечер', () => {
   });
 
   it('смена дня (day.ts): прокат платит до счетов, прохожие — гости дня по утреннему расчёту', () => {
-    const s = rented('medium', { day: 41 });
+    const s = rented({ day: 41 });
     const plan = rentalDay(s, guestsToday(s))!;
     const night = nightCycle(s, emptyDayStats(), () => 0.5);
     expect(night.rental).toEqual(plan);
-    expect(night.state.rental!.stock).toBe(RENTAL_CAP - plan.lost);
+    expect(night.state.rental!.earned).toBe(plan.income);
     // Без стойки в итогах дня проката нет.
     expect(nightCycle(shop({ day: 41 }), emptyDayStats(), () => 0.5).rental).toBeNull();
   });
@@ -221,17 +193,21 @@ describe('прокат: старые сохранения и мир', () => {
     expect(rentalDay(old, 100)).toBeNull();
   });
 
-  it('испорченная стойка в сохранении чинится: запас в пределах, залог — средний', () => {
-    const bad = shop({ rental: { stock: 99, deposit: 'gold' as Deposit } });
-    expect(rentalOf(bad)).toMatchObject({ stock: RENTAL_CAP, deposit: 'medium' });
-    expect(rentalOf(shop({ rental: { stock: -3, deposit: 'small' } }))!.stock).toBe(0);
-    expect(rentalOf(shop({ rental: { stock: Number.NaN, deposit: 'small' } }))!.stock).toBe(0);
+  it('стойка до 27.11 (запас 4 из 10, маленький залог) работает как полная, первый вечер убирает старые поля', () => {
+    const old = shop({ level: 4, day: 60, rental: { stock: 4, deposit: 'small', earned: 900, last: { kit: 'rain', rented: 4, lost: 1, income: 68, kept: 20, day: 59 } } as unknown as StoreState['rental'] });
+    const fresh = rented({ level: 4, day: 60 });
+    expect(rentalDay(old, 300)).toEqual(rentalDay(fresh, 300));
+    expect(rentalDay(old, 300)!.rented).toBeGreaterThan(4);
+    expect(rentalLog(old)).toMatchObject({ last: 68, total: 900 });
+    const night = rentalNight(old, 300).state;
+    expect(Object.keys(night.rental!).sort()).toEqual(['earned', 'last']);
+    expect(night.rental!.earned).toBe(900 + rentalDay(old, 300)!.income);
   });
 
-  it('вид стойки меняется с набором и запасом (сцена ставит её заново)', () => {
+  it('вид стойки меняется с набором и размером (сцена ставит её заново)', () => {
     const s = rented();
-    expect(rentalLook(s)).toBe(`${rentalKit(s.day)}:${RENTAL_CAP}`);
-    expect(rentalLook({ ...s, rental: { ...s.rental!, stock: 3 } })).not.toBe(rentalLook(s));
+    expect(rentalLook(s)).toBe(`${rentalKit(s.day)}:${rentalCap(s)}`);
+    expect(rentalLook({ ...s, level: 4 })).not.toBe(rentalLook(s));
   });
 
   it('подсказка «Новое» — когда стойку можно поставить, и один раз', () => {
@@ -243,13 +219,12 @@ describe('прокат: старые сохранения и мир', () => {
     expect(pendingTip({ ...early, day: RENTAL_FROM_DAY, seenTips: [...early.seenTips!, 'rental'] })).toBeNull();
   });
 
-  it('тексты на месте: заголовок, залоги, итог дня', () => {
-    for (const id of DEPOSIT_IDS) {
-      expect(ru[`rental.dep.${id}` as keyof typeof ru]).toBeTruthy();
-      expect(ru[`rental.dep.${id}.note` as keyof typeof ru]).toBeTruthy();
-    }
+  it('тексты на месте: наборы, цена за день, плитка; про залог — ни слова', () => {
     for (const kit of ['winter', 'wheels', 'rain']) expect(ru[`rental.kit.${kit}` as keyof typeof ru]).toBeTruthy();
+    expect(ru['rental.perDay']).toContain('{n}');
+    expect(ru['rental.tile']).toContain('{sum}');
     expect(ru['tip.rental.title']).toBeTruthy();
+    expect(Object.entries(ru).filter(([k, v]) => k.startsWith('rental.') || k === 'tip.rental.text' ? /залог/i.test(v) : false)).toEqual([]);
   });
 });
 
@@ -263,9 +238,9 @@ describe('прокат: сохранение в телефоне', () => {
       localStorage: { getItem: (k: string) => local[k] ?? null, setItem: (k: string, v: string) => (local[k] = v), removeItem: (k: string) => delete local[k] },
     });
     const { loadGame, saveGame } = await import('../src/game/save');
-    const s = rented('large', { day: 50 });
+    const s = rentalNight(rented({ day: 50 }), 100).state;
     saveGame(s);
-    expect(loadGame()!.rental).toEqual({ stock: RENTAL_CAP, deposit: 'large' });
+    expect(loadGame()!.rental).toEqual(s.rental);
     const old = shop();
     delete (old as Partial<StoreState>).rental;
     saveGame(old);
@@ -274,8 +249,8 @@ describe('прокат: сохранение в телефоне', () => {
 });
 
 describe('прокат: симулятор', () => {
-  // Стойка — приятная добавка, а не новая главная статья: к сотому дню денег чуть больше, не вдвое.
-  it('ставит стойку, докупает пропавшее и не ломает баланс', () => {
+  // Стойка — заметная добавка, а не новая главная статья: к сотому дню денег больше, но не вдвое.
+  it('ставит стойку и не ломает баланс', () => {
     const features = { tenants: true, garden: true };
     let base = 0;
     let withRental = 0;

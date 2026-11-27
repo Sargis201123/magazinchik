@@ -7,7 +7,7 @@ import { isDecorId, normalizeDecor, type DecorId } from './decor';
 import { REGISTERS_BY_LEVEL } from './registers';
 import { activePet, cleanPetName, isPetId } from './pets';
 import { TENANT_IDS, tenantsOf, tenantTier, type TenantId } from './tenants';
-import { bedsOf, CROP_IDS, type CropId } from './garden';
+import { BED_CROPS, bedCount, CROP_IDS, type CropId } from './garden';
 
 export interface ShopSnapshot {
   day: number;
@@ -21,7 +21,7 @@ export interface ShopSnapshot {
   registers?: number;
   /** Питомец за звёзды в зале (pets.ts) и его имя — друг тоже его увидит. Старые снимки — без поля. */
   pet?: { id: string; name?: string };
-  /** Арендаторы флигеля по порядку комнат («id» или «id+» — отделан дважды) и культуры на грядках двора. Старые снимки — без полей. */
+  /** Арендаторы флигеля по порядку комнат («id» или «id+» — отделан дважды) и культуры на грядках двора (по числу грядок). Старые снимки — без полей. */
   tenants?: string[];
   beds?: string[];
 }
@@ -44,12 +44,9 @@ export function shopSnapshot(state: StoreState): ShopSnapshot {
     ...(state.registers ? { registers: state.registers } : {}),
     ...(activePet(state) ? { pet: activePet(state) } : {}),
     ...(tenantsOf(state).length ? { tenants: tenantsOf(state).map((id) => (tenantTier(state, id) === 2 ? `${id}+` : id)) } : {}),
-    ...(state.garden ? { beds: bedsOf(state).map((bed) => bed.crop) } : {}),
+    ...(state.garden ? { beds: BED_CROPS.slice(0, bedCount(state)) } : {}),
   };
 }
-
-/** Грядки в гостях «посажены в далёком будущем»: всегда ростки, никогда не спелые. */
-export const GUEST_GARDEN = 8e15;
 
 const num = (v: unknown, min: number, max: number, fallback = min): number => {
   const n = Number(v);
@@ -79,7 +76,7 @@ export function friendState(raw: unknown, home: StoreState): StoreState | null {
   // Питомец друга: только известный, имя — почищенное (его видно в мире над питомцем).
   const petId = snap.pet && typeof snap.pet === 'object' && isPetId(snap.pet.id) ? snap.pet.id : undefined;
   const petName = petId ? cleanPetName(snap.pet!.name) : '';
-  // Арендаторы и двор друга: только известные виды; грядки показываем «в росте» (GUEST_GARDEN — урожай в гостях не собрать).
+  // Арендаторы и двор друга: только известные виды; у двора важно только число грядок (что на какой - рисует игра).
   const rented = (Array.isArray(snap.tenants) ? snap.tenants : []).slice(0, 3).filter((v): v is string => typeof v === 'string');
   const tenants = rented.map((v) => v.replace(/\+$/, '')).filter((id): id is TenantId => TENANT_IDS.includes(id as TenantId));
   const beds = (Array.isArray(snap.beds) ? snap.beds : []).slice(0, 3).filter((c): c is CropId => CROP_IDS.includes(c as CropId));
@@ -104,6 +101,6 @@ export function friendState(raw: unknown, home: StoreState): StoreState | null {
     ...(snap.registers ? { registers: int(snap.registers, 1, Math.max(...REGISTERS_BY_LEVEL), 1) } : {}),
     ...(petId ? { pets: { owned: [petId], active: petId, ...(petName ? { names: { [petId]: petName } } : {}) } } : {}),
     ...(tenants.length ? { tenants, tenantUp: Object.fromEntries(rented.filter((v) => v.endsWith('+')).map((v) => [v.slice(0, -1), 1])) } : {}),
-    ...(beds.length ? { garden: { since: GUEST_GARDEN, harvests: 0, ...(beds[0] !== 'mix' ? { crop: beds[0] } : {}), ...(beds.length > 1 ? { more: beds.slice(1).map((crop) => ({ crop, since: GUEST_GARDEN })) } : {}) } } : {}),
+    ...(beds.length ? { garden: { beds: beds.length } } : {}),
   };
 }

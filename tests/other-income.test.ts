@@ -3,7 +3,7 @@ import { emptyDayStats, newGame, type StoreState, type Unit } from '../src/game/
 import { nightCycle, otherIncome, type NightSummary } from '../src/game/day';
 import { rentRoom, tenantIncome, tenantRent, tenantsNight } from '../src/game/tenants';
 import { autoLoad, buyVan, planTrip, vanEvents } from '../src/game/van';
-import { RENTAL_CAP } from '../src/game/rental';
+import { yardIncome } from '../src/game/garden';
 import { ru } from '../src/i18n/ru';
 
 // «Прочие доходы» в итогах дня (day.ts otherIncome, 21.11): только отчёт о том, что nightCycle уже положил в кассу
@@ -34,9 +34,9 @@ const matchDay = (): number => {
   throw new Error('нет матча');
 };
 
-/** Тот же магазин с арендаторами, прокатом у входа и загруженным на матч фургоном. */
+/** Тот же магазин с арендаторами, бабушкиным двором на две грядки, прокатом у входа и загруженным на матч фургоном. */
 const busy = (day: number): StoreState => {
-  let s = shop({ day, rental: { stock: RENTAL_CAP, deposit: 'medium' } });
+  let s = shop({ day, rental: {}, garden: { beds: 2 } });
   s = rentRoom(s, 'pickup')!;
   s = rentRoom(s, 'pharmacy')!;
   return autoLoad(planTrip(buyVan(s)!, 'match')!);
@@ -45,14 +45,14 @@ const busy = (day: number): StoreState => {
 const wealth = (s: StoreState): number => s.money - s.debt;
 
 describe('прочие доходы вечера', () => {
-  it('сумма строк — ровно та разница в кассе, что дали аренда, прокат и фургон (без двойного счёта)', () => {
+  it('сумма строк — ровно та разница в кассе, что дали аренда, двор, прокат и фургон (без двойного счёта)', () => {
     const day = matchDay();
     const plain = shop({ day });
     const full = busy(day);
     const nPlain = nightCycle(plain, emptyDayStats(), () => 0.5);
     const nFull = nightCycle(full, emptyDayStats(), () => 0.5);
     const rows = otherIncome(nFull);
-    expect(rows.map((r) => r.id).sort()).toEqual(['rent', 'rental', 'van']);
+    expect(rows.map((r) => r.id).sort()).toEqual(['rent', 'rental', 'van', 'yard']);
     const sum = rows.reduce((s, r) => s + r.n, 0);
     // Вечер с доходами против того же вечера без них: разница в кассе — только эти деньги.
     const gained = wealth(nFull.state) - wealth(full) - (wealth(nPlain.state) - wealth(plain));
@@ -61,6 +61,7 @@ describe('прочие доходы вечера', () => {
     expect(rows.find((r) => r.id === 'rent')!.n).toBe(tenantRent(full));
     expect(rows.find((r) => r.id === 'van')!.n).toBe(nFull.van!.net);
     expect(rows.find((r) => r.id === 'rental')!.n).toBe(nFull.rental!.income);
+    expect(rows.find((r) => r.id === 'yard')!.n).toBe(yardIncome(full));
   });
 
   it('детерминировано: тот же магазин и день — те же строки', () => {

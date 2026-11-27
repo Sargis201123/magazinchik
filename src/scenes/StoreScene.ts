@@ -89,7 +89,7 @@ import { RELIEF_ROLE, tillRole } from '../game/registers';
 import { NIGHT_GUESTS } from '../game/night';
 import { quality, type Quality } from '../platform/quality';
 import { grannyStays, quietDays } from '../game/firstday';
-import { gardenRipe, gardenVisible } from '../game/garden';
+import { gardenVisible } from '../game/garden';
 import type { HomeOrder } from '../game/delivery';
 import { DeliveryUi } from '../ui/delivery';
 import { mainGoal, type HallNudge } from '../game/nudge';
@@ -214,12 +214,6 @@ export class StoreScene extends Phaser.Scene {
   gardener?: Phaser.GameObjects.Container;
   builtGarden = '';
   gardenAt?: { next: import('./layout').Layout; top: number };
-  /** Созрел ли урожай — для кнопки «🌱»: пересчитываем раз в секунду, а не каждый кадр. */
-  private yardCheck = { at: -1e9, ripe: false };
-  yardRipe(): boolean {
-    if (this.time.now - this.yardCheck.at > 1000) this.yardCheck = { at: this.time.now, ripe: gardenRipe(this.state, Date.now()) };
-    return this.yardCheck.ripe;
-  }
   /** Какой район построен (game/zarechye.ts zarLook): Центр или Заречье, шаг Сома, теплоход. */
   builtZar = '';
   /** Какие домики друзей стоят на «Улице друзей» (friendStreet.ts, game/street.ts streetKey). */
@@ -844,7 +838,7 @@ export class StoreScene extends Phaser.Scene {
     });
     void socialPing(getLang(), comebackHooks(this.state)).then((info) => {
       // Друзья: магазин друга встанет на улице рядом, если место свободно (streets.ts).
-      void loadMultiplayer(Boolean(this.state.garden)).then(() => {
+      void loadMultiplayer().then(() => {
         const friend = (this.rivalAcross || this.builtEduard === 'vacant') && (streetInfo()?.[0]?.name || undefined) !== this.builtFriend;
         // Улица друзей пришла или поменялась — домики встают, пока магазин закрыт (днём — завтра утром).
         // На титуле не трогаем: перестройка оборвала бы пролёт камеры — улицу поставит утро (showMorning).
@@ -974,7 +968,7 @@ export class StoreScene extends Phaser.Scene {
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
     this.hud.showHelp(this.running && !this.night && this.time.now < this.helpUntil && nightShift.canCallForHelp(this), this.helpBusy);
     this.hud.showView(this.running && camera.bigStore(this) && !this.arranging, !camera.prefersWide());
-    this.hud.showYard(this.running && !this.arranging && gardenVisible(this.state) && !quietDays(this.state), this.yardRipe());
+    this.hud.showYard(this.running && !this.arranging && gardenVisible(this.state) && !quietDays(this.state));
     // Переключатель этажей слева (14.11): виден, пока идёт день или игрок на этаже.
     floorNav.syncSwitch(this);
     music.setMood(decorations.musicMood(this), this.winterTune);

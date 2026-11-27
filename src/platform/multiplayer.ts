@@ -13,9 +13,8 @@ import { streetFriends, type StreetFriend } from '../game/street';
 export const MP_EVENT = 'magazinchik:multiplayer';
 
 /** При запуске: друзья, подарки, турнир и улица друзей; когда пришло — событие MP_EVENT. */
-export async function loadMultiplayer(garden = false): Promise<void> {
-  // Район (town.ts): garden — у игрока есть теплица, тогда сервер отдаёт поливы друзей.
-  await Promise.all([fetchVisits(), fetchPresents(), fetchLeague(), fetchStreet(), fetchTown(garden).catch(() => null)]);
+export async function loadMultiplayer(): Promise<void> {
+  await Promise.all([fetchVisits(), fetchPresents(), fetchLeague(), fetchStreet(), fetchTown().catch(() => null)]);
   window.dispatchEvent(new Event(MP_EVENT));
 }
 

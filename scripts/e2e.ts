@@ -23,6 +23,7 @@
 //   --port <номер>      порт своего сервера (по умолчанию 4173, занят — возьмёт следующий)
 //   DAY=134             другой игровой день в любом прогоне (погода и сезон по дню: снег 134, дождь 116, жара 163)
 //   FLOORSHOT=1         ещё прогоны flbare и flfull: все этажи открыты (голые / отделанные), кадр каждого этажа
+//   YARD=1              в сохранении бабушкин двор на три грядки и прокат у входа (старый вид полей)
 // Нужен Playwright с Chromium: npm i -D playwright && npx playwright install chromium
 // (свой Chromium — переменная CHROMIUM_PATH).
 
@@ -344,6 +345,31 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
       (text ? buttons.find((b) => b.innerText.includes(text)) : buttons.pop())?.click();
     }, text);
   const scene = (visible: boolean) => page.evaluate((v) => (window as any).game.scene.getScene('store').sys.setVisible(v), visible);
+  /** YARD=1: утреннее окно до открытия - «Главное на сегодня», плитка проката в «Уголках», двор в «Развитии». */
+  const menuShots = async () => {
+    const snap = async (file: string) => {
+      await tick(600);
+      await page.screenshot({ path: SHOTS + file, animations: 'disabled' });
+      say(file);
+    };
+    await snap(`${run.name}-menu.png`);
+    await page.evaluate(() => document.querySelector<HTMLElement>('.ui-tab[data-tab="extras"]')?.click());
+    await tick(400);
+    await page.evaluate((title) => [...document.querySelectorAll<HTMLElement>('.ui-tile-card')].find((b) => b.innerText.includes(title))?.click(), text['rental.title']);
+    await tick(800);
+    await page.evaluate(() => document.querySelector('.ui-shelf-span')?.scrollIntoView({ block: 'center' }));
+    await snap(`${run.name}-menu-rental.png`);
+    await page.evaluate(() => document.querySelector<HTMLElement>('.ui-tab[data-tab="grow"]')?.click());
+    await tick(400);
+    await page.evaluate((title) => {
+      const head = [...document.querySelectorAll<HTMLElement>('.ui-fold-head')].find((h) => h.innerText.includes(title));
+      if (head?.querySelector('.ui-fold-arrow')?.textContent?.startsWith('▸')) head.click();
+      head?.scrollIntoView({ block: 'center' });
+    }, text['garden.title']);
+    await snap(`${run.name}-menu-yard.png`);
+    await page.evaluate(() => document.querySelector<HTMLElement>('.ui-tab[data-tab="buy"]')?.click());
+    await tick(400);
+  };
 
   const day = new Date(NOW).toISOString().slice(0, 10);
   const shelfLvl = process.env.SHELF ? Number(process.env.SHELF) : null;
@@ -354,7 +380,9 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     for (const [k, v] of Object.entries(sh.items ?? {})) { const take = (v as unknown[]).slice(0, Math.max(0, left)); left -= take.length; items[k] = take; }
     return { ...sh, level: shelfLvl, items };
   });
-  const state = { ...save.state, gift: { lastDate: day, streak: 1 }, ...run.patch(save.state), ...(shelfLvl !== null ? { shelves: trimShelves(save.state.shelves as any[]) } : {}), ...(process.env.REG ? { registers: Number(process.env.REG) } : {}), ...(process.env.AUTO ? { autoOrder: { on: true } } : {}), ...(process.env.DAY ? { day: Number(process.env.DAY), plan: undefined } : {}) };
+  // YARD=1: бабушкин двор на три грядки и прокат у входа - в виде старого сохранения (урожай по часам, залог, 8 вещей из 10).
+  const yard = process.env.YARD ? { garden: { since: NOW - 13 * 3600_000, harvests: 5, more: [{ crop: 'apples', since: NOW - 13 * 3600_000 }, { crop: 'quick', since: NOW - 3600_000 }] }, rental: { stock: 8, deposit: 'medium' } } : {};
+  const state = { ...save.state, gift: { lastDate: day, streak: 1 }, ...run.patch(save.state), ...(shelfLvl !== null ? { shelves: trimShelves(save.state.shelves as any[]) } : {}), ...(process.env.REG ? { registers: Number(process.env.REG) } : {}), ...(process.env.AUTO ? { autoOrder: { on: true } } : {}), ...(process.env.DAY ? { day: Number(process.env.DAY), plan: undefined } : {}), ...yard };
   await page.addInitScript(prepare, {
     save: JSON.stringify({ ...save, state }),
     seed: SEED,
@@ -402,6 +430,7 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     if (s.title) await press(text['title.continue']);
     else if (s.dialog) await press();
     else if (s.open && s.modals <= 1) {
+      if (process.env.YARD) await menuShots();
       await press(text['morning.open']);
       break;
     } else if (s.modals) await press();

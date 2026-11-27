@@ -261,13 +261,13 @@ import { leagueBox, leaguePlace } from './league';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toast, unfold, who } from './dom';
-import { gardenBox, harvestNow } from './garden';
-import { gardenRipe, hasGarden } from '../game/garden';
+import { gardenBox } from './garden';
+import { hasGarden } from '../game/garden';
 import { tenantsBox, tenantsSummary } from './tenants';
 import { pawnLines, pawnOfferBox } from './pawnshop';
 import { pawnMet, pawnOffer } from '../game/pawnshop';
-import { rentalAlert, rentalBox, rentalStatus, restockButton } from './rental';
-import { KIT_ICON, RENTAL_CAP, kitToday, rentalOf, rentalOpen } from '../game/rental';
+import { rentalBox, rentalStatus } from './rental';
+import { KIT_ICON, kitToday, rentalOpen } from '../game/rental';
 import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
 import { lotteryNews } from '../game/lottery';
 import { vanBox, vanIdle, vanLines, vanNewsBox, vanStatus, vanToday } from './van';
@@ -2418,9 +2418,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...(foodcourtOf(state)
         ? [{ id: 'foodcourt', icon: 'assets/fc_pizza.png', title: t('floor.third'), status: foodcourtStatus(state), alert: foodcourtAlert(state), details: () => foodcourtBox(getState(), getState, update) }]
         : []),
-      // Прокат у входа (game/rental.ts, 13.11): плитка — когда стойку можно поставить или она уже стоит.
+      // Прокат у входа (game/rental.ts, 13.11): плитка — когда стойку можно поставить или она уже стоит; на ней - сколько
+      // стойка принесёт сегодня (27.11), делать с ней ничего не надо.
       ...(rentalOpen(state) || state.rental
-        ? [{ id: 'rental', icon: KIT_ICON[kitToday(state)], title: t('rental.title'), status: rentalStatus(state), alert: rentalAlert(state), details: () => [rentalBox(getState(), getState, update)] }]
+        ? [{ id: 'rental', icon: KIT_ICON[kitToday(state)], title: t('rental.title'), status: rentalStatus(state), alert: false, details: () => [rentalBox(getState(), getState, update)] }]
         : []),
       {
         id: 'cat',
@@ -3879,8 +3880,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         }, 'ui-chip'),
       );
     }
-    // Теплица: урожай созрел — собрать прямо отсюда (game/garden.ts).
-    if (gardenRipe(state, Date.now())) row(`🌱 ${t('garden.ripe')}`, button(t('garden.harvest'), () => harvestNow(getState, update), 'ui-chip'));
     if (state.cat && !fedToday(state)) {
       row(t('todo.cat', { name: state.cat.name }), button(t('todo.catBtn', { n: FEED_COST }), () => update(feedCat(getState()), 'success'), 'ui-chip', state.money < FEED_COST));
     }
@@ -3889,9 +3888,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     if (rack.stock <= rackCapacity(state) / 3 && rackFree > 0) {
       row(t('todo.rack', { n: rack.stock }), button(t('todo.rackBtn', { n: rackFree * CANDY_COST }), () => update(refillRack(getState(), rackFree), 'success'), 'ui-chip', state.money < rackFree * CANDY_COST));
     }
-    // Прокат: вещи пропали (не вернули) — докупить, иначе стойка беднеет (game/rental.ts).
-    const rentRefill = restockButton(state, getState, update);
-    if (rentRefill) row(t('todo.rental', { n: rentalOf(state)?.stock ?? 0, max: RENTAL_CAP }), rentRefill);
     if (hasUpgrade(state, 'coffee') && cupsOf(state) < 8) {
       const n = CUPS_MAX - cupsOf(state);
       row(t('todo.cups', { n: cupsOf(state) }), button(t('todo.cupsBtn', { n, cost: n * CUP_COST }), () => update(buyCups(getState(), n), 'success'), 'ui-chip', state.money < n * CUP_COST));

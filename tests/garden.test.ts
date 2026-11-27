@@ -1,150 +1,185 @@
-import { describe, expect, it } from 'vitest';
-import { canPlace, newGame, onShelves, shelfCapacity, SHELF_LEVELS, warehouseCount, type StoreState } from '../src/game/economy';
-import { addBed, BED_COSTS, bedsOf, CROPS, gardenRipeAt, growMs, OWN_JAM_DAYS, ownJam, plant, water, WATER_MS, buildGarden, cropQty, GARDEN_CROPS, GARDEN_FROM_DAY, GARDEN_PRICE, gardenLeft, gardenLook, gardenProgress, gardenRipe, gardenStage, gardenVisible, GROW_MS, harvest, shelfRoomFor } from '../src/game/garden';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { emptyDayStats, newGame, type StoreState } from '../src/game/economy';
+import {
+  addBed,
+  BED_COSTS,
+  BEDS_MAX,
+  bedCount,
+  bedIncome,
+  buildGarden,
+  GARDEN_FROM_DAY,
+  GARDEN_PRICE,
+  gardenLook,
+  gardenVisible,
+  nextBedCost,
+  OWN_JAM_DEMAND,
+  ownJam,
+  YARD_PER_BED,
+  yardIncome,
+  yardLog,
+  yardNight,
+  yardStage,
+} from '../src/game/garden';
+import { lineDemand } from '../src/game/lines';
+import { nightCycle, otherIncome } from '../src/game/day';
+import { comebackHooks } from '../src/game/comeback';
+import { ru } from '../src/i18n/ru';
 
-// «Бабушкина теплица» (garden.ts): растёт по настоящему времени, урожай — бесплатно прямо на овощной прилавок.
+// «Бабушкин двор» (garden.ts, 27.11): как аренда - каждая грядка каждый вечер приносит 30 × (помещение + 1),
+// без сбора, таймеров и прилавка; деньги видны строкой в «Прочих доходах».
 
-const NOW = Date.UTC(2026, 10, 10, 9, 0, 0);
-const shop = (over: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 5, money: 1000, ...over });
-const planted = (over: Partial<StoreState> = {}): StoreState => buildGarden(shop(over), NOW)!;
-/** Пустые полки побольше: урожаю есть куда встать. */
-const emptyShelves = (state: StoreState): StoreState => ({ ...state, shelves: state.shelves.map((s) => ({ ...s, level: SHELF_LEVELS.length - 1, items: {} })) });
+const shop = (over: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 5, money: 1000, debt: 0, ...over });
+const built = (over: Partial<StoreState> = {}): StoreState => buildGarden(shop(over))!;
 
-describe('теплица: поставить', () => {
-  it('с третьего дня, за деньги, один раз', () => {
+describe('двор: поставить и вскопать', () => {
+  it('теплица - с третьего дня, за деньги, один раз, сразу одна грядка', () => {
     expect(gardenVisible(shop({ day: GARDEN_FROM_DAY - 1 }))).toBe(false);
-    expect(buildGarden(shop({ day: GARDEN_FROM_DAY - 1 }), NOW)).toBeNull();
-    expect(buildGarden(shop({ money: GARDEN_PRICE - 1 }), NOW)).toBeNull();
-    const state = planted();
+    expect(buildGarden(shop({ day: GARDEN_FROM_DAY - 1 }))).toBeNull();
+    expect(buildGarden(shop({ money: GARDEN_PRICE - 1 }))).toBeNull();
+    const state = built();
     expect(state.money).toBe(1000 - GARDEN_PRICE);
-    expect(state.garden).toEqual({ since: NOW, harvests: 0 });
-    expect(buildGarden(state, NOW)).toBeNull();
-  });
-});
-
-describe('теплица: рост по настоящему времени', () => {
-  it('стадии 0 → 3 за время роста, перевод часов назад рост в минус не уводит', () => {
-    const state = planted();
-    expect(gardenStage(state, NOW)).toBe(0);
-    expect(gardenStage(state, NOW + GROW_MS * 0.4)).toBe(1);
-    expect(gardenStage(state, NOW + GROW_MS * 0.8)).toBe(2);
-    expect(gardenStage(state, NOW + GROW_MS)).toBe(3);
-    expect(gardenRipe(state, NOW + GROW_MS - 1)).toBe(false);
-    expect(gardenProgress(state, NOW - 5 * 3600_000)).toBe(0);
-    expect(gardenLeft(state, NOW + GROW_MS / 2)).toBe(GROW_MS / 2);
-    expect(gardenLeft(state, NOW + GROW_MS * 3)).toBe(0);
-    expect(gardenLook(state, NOW)).not.toBe(gardenLook(state, NOW + GROW_MS));
-    expect(gardenLook(shop(), NOW)).toBe('');
-  });
-});
-
-describe('теплица: урожай', () => {
-  it('не созрел — собирать нечего', () => {
-    expect(harvest(planted(), NOW + GROW_MS - 1)).toBeNull();
-    expect(harvest(shop(), NOW)).toBeNull();
+    expect(state.garden).toEqual({ beds: 1 });
+    expect(bedCount(state)).toBe(1);
+    expect(buildGarden(state)).toBeNull();
   });
 
-  it('созрел — яблоки и картофель бесплатно прямо на прилавок, склад не трогает, рассада посажена заново', () => {
-    const state = emptyShelves(planted({ warehouse: {} }));
-    const later = NOW + GROW_MS + 1000;
-    const done = harvest(state, later)!;
-    expect(done.got.map((g) => g.id)).toEqual(GARDEN_CROPS);
-    for (const { id, qty } of done.got) {
-      expect(qty).toBe(cropQty(state));
-      expect(onShelves(done.state, id)).toBe(qty);
-    }
-    expect(warehouseCount(done.state)).toBe(0);
-    expect(done.state.money).toBe(state.money);
-    expect(done.state.garden).toEqual({ since: later, harvests: 1, own: state.day + OWN_JAM_DAYS - 1 });
-    expect(gardenRipe(done.state, later)).toBe(false);
-  });
-
-  it('в большом магазине урожай больше', () => {
-    expect(cropQty(shop({ level: 4 }))).toBeGreaterThan(cropQty(shop({ level: 0 })));
-  });
-
-  it('прилавок полон — урожай ждёт на грядке, а не пропадает и не идёт на склад', () => {
-    const state = planted({ warehouse: {} });
-    const stuffed = { ...state, shelves: state.shelves.map((s) => (canPlace('apples', s) ? { ...s, items: { apples: Array.from({ length: shelfCapacity(s) }, () => ({ age: 0 })) } } : s)) };
-    expect(shelfRoomFor(stuffed, 'apples')).toBe(0);
-    const later = NOW + GROW_MS;
-    expect(harvest(stuffed, later)).toBeNull();
-    expect(gardenRipe(stuffed, later)).toBe(true);
-    expect(warehouseCount(stuffed)).toBe(0);
-  });
-
-  it('места на прилавке меньше урожая — встаёт сколько влезло', () => {
-    const state = emptyShelves(planted({ warehouse: {}, level: 4 }));
-    const room = shelfRoomFor(state, 'apples');
-    const tight = { ...state, shelves: state.shelves.map((s) => (canPlace('apples', s) ? { ...s, items: { apples: Array.from({ length: shelfCapacity(s) - 1 }, () => ({ age: 0 })) } } : s)) };
-    const free = shelfRoomFor(tight, 'apples');
-    expect(free).toBeGreaterThan(0);
-    expect(free).toBeLessThan(room);
-    const done = harvest(tight, NOW + GROW_MS)!;
-    expect(done.got.reduce((n, g) => n + g.qty, 0)).toBe(free);
-    expect(shelfRoomFor(done.state, 'apples')).toBe(0);
-  });
-});
-
-describe('двор: грядки и культуры', () => {
-  it('культуру можно сменить — рассада сажается заново, свои часы и свой урожай', () => {
-    const state = emptyShelves(planted({ warehouse: {} }));
-    expect(plant(state, 0, 'mix', NOW)).toBeNull();
-    expect(plant(state, 1, 'quick', NOW)).toBeNull();
-    const quick = plant(state, 0, 'quick', NOW + 1000)!;
-    expect(bedsOf(quick)).toEqual([{ crop: 'quick', since: NOW + 1000 }]);
-    expect(gardenRipe(quick, NOW + 1000 + growMs('quick') - 1)).toBe(false);
-    const done = harvest(quick, NOW + 1000 + growMs('quick'))!;
-    expect(done.got).toEqual([{ id: 'potatoes', qty: cropQty(quick, 'quick') }]);
-    // Картошка — не яблоки: варенье «из своих яблок» не объявляем.
-    expect(done.state.garden?.own).toBeUndefined();
-    expect(bedsOf(done.state)[0].crop).toBe('quick');
-  });
-
-  it('длинная культура даёт за заход больше, за час — не больше короткой', () => {
-    const state = shop({ level: 2 });
-    const perHour = (crop: 'quick' | 'mix' | 'apples') => (cropQty(state, crop) * CROPS[crop].gives.length) / CROPS[crop].hours;
-    expect(cropQty(state, 'apples')).toBeGreaterThan(cropQty(state, 'mix') * 2 - 1);
-    expect(perHour('apples')).toBeLessThanOrEqual(perHour('mix'));
-    expect(perHour('quick')).toBeLessThanOrEqual(perHour('mix'));
-  });
-
-  it('вторая и третья грядки — за деньги, собираются вместе со спелыми', () => {
-    let state = emptyShelves(planted({ money: 5000, warehouse: {}, level: 3 }));
-    state = addBed(state, NOW)!;
+  it('вторая и третья грядки - за 600 и 1 500, больше трёх нельзя', () => {
+    let state = built({ money: 5000 });
+    expect(nextBedCost(state)).toBe(BED_COSTS[0]);
+    state = addBed(state)!;
     expect(state.money).toBe(5000 - GARDEN_PRICE - BED_COSTS[0]);
-    state = addBed(state, NOW)!;
-    expect(addBed(state, NOW)).toBeNull();
-    expect(bedsOf(state).map((b) => b.crop)).toEqual(['mix', 'quick', 'quick']);
-    expect(gardenRipeAt(state)).toBe(NOW + growMs('quick'));
-    // Через два часа спела только картошка: первая грядка растёт дальше со своего времени.
-    const early = harvest(state, NOW + growMs('quick'))!;
-    expect(early.got).toEqual([{ id: 'potatoes', qty: cropQty(state, 'quick') * 2 }]);
-    expect(bedsOf(early.state)[0].since).toBe(NOW);
-    expect(bedsOf(early.state)[1].since).toBe(NOW + growMs('quick'));
-    expect(gardenLook(early.state, NOW + growMs('quick'))).not.toBe(gardenLook(state, NOW + growMs('quick')));
+    expect(nextBedCost(state)).toBe(BED_COSTS[1]);
+    state = addBed(state)!;
+    expect(bedCount(state)).toBe(BEDS_MAX);
+    expect(nextBedCost(state)).toBeNull();
+    expect(addBed(state)).toBeNull();
+    expect(addBed(shop())).toBeNull();
+    expect(addBed({ ...built(), money: BED_COSTS[0] - 1 })).toBeNull();
   });
 
-  it('мусор в сохранении грядки не ломает', () => {
-    const state = { ...planted(), garden: { since: NOW, harvests: 0, crop: 'cactus', more: [{ crop: 'apples', since: NOW }, { crop: 'x', since: 1 }, null] } } as unknown as StoreState;
-    expect(bedsOf(state)).toEqual([{ crop: 'mix', since: NOW }, { crop: 'apples', since: NOW }]);
+  it('в Заречье теплицу не ставят и грядки не копают', () => {
+    const zar = { zar: { at: 'zar' } as StoreState['zar'] };
+    expect(buildGarden(shop(zar))).toBeNull();
+    expect(addBed({ ...built({ money: 5000 }), ...zar })).toBeNull();
   });
 });
 
-describe('двор: полив друга и своё варенье', () => {
-  it('полив приближает урожай на час, спелое не трогает', () => {
-    const state = planted();
-    const wet = water(state, NOW + 1000)!;
-    expect(gardenLeft(wet, NOW + 1000)).toBe(gardenLeft(state, NOW + 1000) - WATER_MS);
-    expect(wet.garden?.watered).toBe(1);
-    expect(water(state, NOW + GROW_MS)).toBeNull();
-    expect(water(shop(), NOW)).toBeNull();
+describe('двор: деньги каждый вечер', () => {
+  it('30 × (помещение + 1) за грядку: Универмаг с тремя грядками - 450', () => {
+    expect(YARD_PER_BED).toBe(30);
+    expect(bedIncome(shop({ level: 0 }))).toBe(30);
+    expect(bedIncome(shop({ level: 3 }))).toBe(120);
+    expect(bedIncome(shop({ level: 5 }))).toBe(180);
+    const three = { ...shop({ level: 4 }), garden: { beds: 3 } };
+    expect(yardIncome(three)).toBe(450);
+    expect(yardIncome(shop())).toBe(0);
   });
 
-  it('после сбора яблок варенье пару дней — из своих (если линейка открыта)', () => {
-    const done = harvest(emptyShelves(planted({ warehouse: {}, lines: { jam: 1 } })), NOW + GROW_MS)!;
-    expect(ownJam(done.state)).toBe(true);
-    expect(ownJam({ ...done.state, day: done.state.day + OWN_JAM_DAYS })).toBe(false);
-    expect(ownJam({ ...done.state, lines: {} })).toBe(false);
+  it('вечер: деньги в кассу, «вчера» и «всего» для карточки', () => {
+    const s = { ...built({ level: 2 }), day: 30 };
+    const first = yardNight(s);
+    expect(first.income).toBe(90);
+    expect(first.state.money).toBe(s.money + 90);
+    expect(first.state.garden).toEqual({ beds: 1, last: { day: 30, n: 90 }, total: 90 });
+    const second = yardNight({ ...first.state, day: 31 }).state;
+    expect(second.garden?.total).toBe(180);
+    expect(yardLog({ ...second, day: 32 })).toEqual({ last: 90, total: 180 });
+    // Вчера двор не платил (пропуск дня) или вечера ещё не было - строки нет.
+    expect(yardLog({ ...second, day: 34 })).toBeNull();
+    expect(yardLog(s)).toBeNull();
+    // Без двора вечер ничего не меняет.
+    const plain = shop();
+    expect(yardNight(plain)).toEqual({ state: plain, income: 0 });
+  });
+
+  it('смена дня (day.ts): двор платит до счетов строкой «Бабушкин двор» в прочих доходах', () => {
+    const s = { ...built({ level: 4, money: 5000 }), day: 40 };
+    const plain = { ...shop({ level: 4, money: 5000 - GARDEN_PRICE }), day: 40 };
+    const night = nightCycle(s, emptyDayStats(), () => 0.5);
+    expect(night.yard).toBe(150);
+    expect(otherIncome(night)).toContainEqual({ id: 'yard', n: 150 });
+    // Разница в кассе с тем же магазином без двора - ровно доход двора.
+    const without = nightCycle(plain, emptyDayStats(), () => 0.5);
+    expect(night.state.money - night.state.debt - (without.state.money - without.state.debt)).toBe(150);
+    expect(otherIncome(without).some((r) => r.id === 'yard')).toBe(false);
+    expect(ru['garden.summary']).toContain('🌱');
+  });
+
+  it('в Заречье двор в Центре платит, как арендаторы, - по помещению Центра', () => {
+    const s = { ...built({ level: 4 }), zar: { at: 'zar', away: { level: 4 } } as unknown as StoreState['zar'], level: 1 };
+    expect(yardIncome(s)).toBe(150);
+  });
+});
+
+describe('двор: варенье из своих яблок', () => {
+  it('пока двор стоит и линейка открыта - варенье берут охотнее, без окна в два дня', () => {
+    const s = built({ lines: { jam: 1 } });
+    expect(ownJam(s)).toBe(true);
+    expect(ownJam({ ...s, day: s.day + 30 })).toBe(true);
+    expect(ownJam({ ...s, lines: {} })).toBe(false);
+    expect(ownJam(shop({ lines: { jam: 1 } }))).toBe(false);
+    const noYard = shop({ lines: { jam: 1 } });
+    expect(lineDemand(s, 'jam', true) / lineDemand(noYard, 'jam', true)).toBeCloseTo(OWN_JAM_DEMAND);
+  });
+});
+
+describe('двор: картинка', () => {
+  it('грядки растут по ходу дня: утром ростки, к вечеру спело; вид меняется с числом грядок', () => {
+    expect(yardStage(0)).toBe(1);
+    expect(yardStage(0.4)).toBe(2);
+    expect(yardStage(0.8)).toBe(3);
+    expect(yardStage(1)).toBe(3);
+    expect(yardStage(-1)).toBe(1);
+    const s = built({ money: 5000 });
+    expect(gardenLook(s, 0)).not.toBe(gardenLook(s, 0.9));
+    expect(gardenLook(addBed(s)!, 0)).not.toBe(gardenLook(s, 0));
+    expect(gardenLook(shop(), 0.5)).toBe('');
+  });
+});
+
+describe('двор: старые сохранения (урожай по часам, до 27.11)', () => {
+  const old = (garden: unknown): StoreState => ({ ...shop({ level: 4 }), garden: garden as StoreState['garden'] });
+
+  it('грядки считаются по since/more, урожай и таймеры просто не читаются', () => {
+    expect(bedCount(old({ since: 1, harvests: 14, own: 99 }))).toBe(1);
+    expect(bedCount(old({ since: 1, harvests: 4, crop: 'apples', more: [{ crop: 'apples', since: 1 }, { crop: 'quick', since: 2 }] }))).toBe(3);
+    expect(yardIncome(old({ since: 1, harvests: 4, more: [{ crop: 'apples', since: 1 }] }))).toBe(300);
+    // Мусор в сохранении: битые грядки не считаем, больше трёх не бывает.
+    expect(bedCount(old({ since: 1, harvests: 0, crop: 'cactus', more: [{ crop: 'x', since: 1 }, null, 7] }))).toBe(2);
+    expect(bedCount(old({ since: 1, more: [{}, {}, {}, {}, {}] }))).toBe(BEDS_MAX);
+    expect(bedCount(old({ beds: 99 }))).toBe(BEDS_MAX);
+    expect(bedCount(old({ beds: -4 }))).toBe(1);
+  });
+
+  it('первый вечер переводит двор в новый вид, грядок столько же; докопать можно дальше', () => {
+    const s = old({ since: 1, harvests: 5, crop: 'mix', own: 200, watered: 2, more: [{ crop: 'apples', since: 1 }] });
+    const night = yardNight({ ...s, day: 50 });
+    expect(night.state.garden).toEqual({ beds: 2, last: { day: 50, n: 300 }, total: 300 });
+    const dug = addBed({ ...s, money: 5000 })!;
+    expect(dug.garden).toEqual({ beds: 3 });
+    expect(dug.money).toBe(5000 - BED_COSTS[1]);
+  });
+
+  it('бот про урожай больше не зовёт: в поводах игры нет поля ripe', () => {
+    expect('ripe' in comebackHooks(old({ since: 1, harvests: 0 }))).toBe(false);
+  });
+});
+
+describe('двор: сохранение в телефоне', () => {
+  afterEach(() => delete (globalThis as Record<string, unknown>).localStorage);
+
+  it('старое сохранение с урожаем по часам грузится без ошибок, грядки на месте', async () => {
+    vi.resetModules();
+    const local: Record<string, string> = {};
+    Object.assign(globalThis, {
+      localStorage: { getItem: (k: string) => local[k] ?? null, setItem: (k: string, v: string) => (local[k] = v), removeItem: (k: string) => delete local[k] },
+    });
+    const { loadGame } = await import('../src/game/save');
+    const saved = { ...shop({ level: 3 }), garden: { since: 1_700_000_000_000, harvests: 9, crop: 'quick', more: [{ crop: 'apples', since: 1 }, { crop: 'mix', since: 2 }], own: 12, watered: 1 } };
+    local['magazinchik.save'] = JSON.stringify({ version: 11, state: saved });
+    const loaded = loadGame()!;
+    expect(bedCount(loaded)).toBe(3);
+    expect(yardIncome(loaded)).toBe(3 * 120);
+    expect(nightCycle(loaded, emptyDayStats(), () => 0.5).yard).toBe(360);
   });
 });

@@ -1,212 +1,109 @@
-// «Бабушкина теплица»: растёт по настоящему времени — и пока игрока нет в игре. Вернулся — урожай созрел:
-// яблоки и картофель бесплатно на овощной прилавок (11.11: раньше — на склад), и рассада сразу посажена заново. Это повод зайти ещё раз сегодня или
-// завтра, который видно в мире (scenes/gardenFx.ts), в «Главном на сегодня» и в «Развитии» (ui/garden.ts).
-// Время приходит снаружи (now): правила не читают часы сами — так их можно проверить тестом.
-//
-// 10.11 (третий обход): теплица стоит во дворе слева от магазина, за складом, — раньше в тесных помещениях она
-// уезжала в парк за дорогой, и её не находили. Во дворе до трёх грядок, у каждой своя культура и свои часы:
-// картошка поспевает за два часа, яблоки с картошкой — за шесть, яблони — за двенадцать (больше всего за раз).
-// Друг в гостях может полить — урожай на час ближе. Варенье своей марки пару дней варят «из своих яблок».
+// «Бабушкин двор»: теплица и до двух грядок во дворе слева от магазина, за складом.
+// 27.11, просьба автора: «пусть он будет как аренда, пассивно приносить деньги - игрок не будет заходить в меню и каждый
+// раз собирать». Раньше урожай рос по настоящим часам (2 / 6 / 12 ч), его собирали руками на овощной прилавок: собирать
+// бросали через несколько дней, прилавок бывал полон, лишнее молча пропадало. Теперь каждая грядка каждый вечер
+// приносит деньги (бабушка продаёт урожай соседям у калитки): 30 × (помещение + 1) за грядку, до счетов, как аренда
+// флигеля (day.ts), строкой «🌱 Бабушкин двор» в «Прочих доходах» итогов дня. Решение у игрока одно - вскопать ещё грядку.
+// Пока двор стоит, варенье своей марки - «из своих яблок» (lines.ts). Мир - scenes/gardenFx.ts, меню - ui/garden.ts.
 
-import { canPlace, sellableProducts, shelfFree, type ProductId, type StoreState } from './economy';
-import { inZar } from './zarshop';
+import type { StoreState } from './economy';
+import { homeLevel, inZar } from './zarshop';
 
+/** Что растёт на грядке - только для картинки и подписи: теплица - яблоки с картошкой, вторая - яблони, третья - картошка. */
 export type CropId = 'quick' | 'mix' | 'apples';
 export const CROP_IDS: CropId[] = ['quick', 'mix', 'apples'];
-
-export interface Crop {
-  icon: string;
-  /** Сколько зреет, часов настоящего времени. */
-  hours: number;
-  /** Что даёт и сколько: base + perLevel × уровень помещения — каждого вида. */
-  gives: ProductId[];
-  base: number;
-  perLevel: number;
-}
-
-/**
- * Культуры. За час все дают примерно поровну; короткая — тому, кто заглядывает часто, длинная — тому, кто заходит
- * раз в день: за один заход с неё больше всего. Товары — те, что на овощном прилавке с первого дня.
- */
-export const CROPS: Record<CropId, Crop> = {
-  quick: { icon: '🥔', hours: 2, gives: ['potatoes'], base: 4, perLevel: 2 },
-  mix: { icon: '🍎', hours: 6, gives: ['apples', 'potatoes'], base: 6, perLevel: 3 },
-  apples: { icon: '🌳', hours: 12, gives: ['apples'], base: 14, perLevel: 7 },
-};
-
-export interface Bed {
-  crop: CropId;
-  /** Когда посажена нынешняя рассада (мс по часам игрока). */
-  since: number;
-}
+export const BED_CROPS: CropId[] = ['mix', 'apples', 'quick'];
+export const CROP_ICON: Record<CropId, string> = { quick: '🥔', mix: '🍎', apples: '🌳' };
 
 export interface GardenState {
-  /** Первая грядка: когда посажена (мс по часам игрока) и что на ней (нет — «яблоки и картошка», как было). */
-  since: number;
-  crop?: CropId;
-  /** Сколько урожаев собрано за всё время. */
-  harvests: number;
-  /** Вторая и третья грядки. */
-  more?: Bed[];
-  /** До какого игрового дня варенье своей марки — «из своих яблок» (после сбора яблок). */
+  /** Сколько грядок вскопано: 1…3. Нет поля - сохранение до 27.11: грядки считаются по since/more (bedCount). */
+  beds?: number;
+  /** Прошлый вечер: какой день и сколько принёс двор. */
+  last?: { day: number; n: number };
+  /** Сколько двор принёс за всё время. */
+  total?: number;
+  // До 27.11 (урожай по часам): первая грядка - since/crop, остальные - more; сборы, «своё варенье», поливы друзей.
+  // Читаются только, чтобы посчитать грядки старого сохранения; первый же вечер их убирает.
+  since?: number;
+  crop?: string;
+  harvests?: number;
+  more?: unknown[];
   own?: number;
-  /** Сколько раз друзья полили теплицу. */
   watered?: number;
 }
 
 /** Рассаду бабушка присылает на третий день: первые два новичок учится торговать. */
 export const GARDEN_FROM_DAY = 3;
 export const GARDEN_PRICE = 150;
-/** Урожай «как раньше» зреет шесть часов: успевает и к вечеру того же дня, и к завтрашнему утру. */
-export const GROW_MS = 6 * 3600_000;
-/** Что растёт на грядке по умолчанию: то, что есть на овощном прилавке с первого дня. */
-export const GARDEN_CROPS: ProductId[] = CROPS.mix.gives;
 /** Вторая и третья грядки: цена. */
 export const BED_COSTS = [600, 1500];
 export const BEDS_MAX = BED_COSTS.length + 1;
-/** Полив друга: урожай на столько ближе. */
-export const WATER_MS = 3600_000;
-/** Сколько игровых дней после сбора яблок варенье — «из своих яблок», и на сколько охотнее его берут (lines.ts). */
-export const OWN_JAM_DAYS = 2;
+/**
+ * Сколько грядка приносит за вечер: столько × (помещение + 1). Универмаг - 150 за грядку, 450 за три (~1% выручки):
+ * столько двор давал тому, кто собирал урожай каждый день, но теперь каждый день и без касаний. Теплица за 150
+ * в «Ларьке» окупается за 5 дней, третья грядка за 1 500 в «Минимаркете» - за 17.
+ */
+export const YARD_PER_BED = 30;
+/** Варенье своей марки «из своих яблок» берут охотнее (lines.ts) - пока стоит двор. */
 export const OWN_JAM_DEMAND = 1.2;
 
 export const hasGarden = (state: StoreState): boolean => Boolean(state.garden);
 /** Раздел виден в Центре: с третьего дня или если теплица уже стоит. */
 export const gardenVisible = (state: StoreState): boolean => !inZar(state) && (hasGarden(state) || state.day >= GARDEN_FROM_DAY);
 
-const isCrop = (id: unknown): id is CropId => typeof id === 'string' && id in CROPS;
-
-/** Грядки по порядку: первая — из старых полей (since, crop), остальные — more. Мусор из сохранения не берём. */
-export function bedsOf(state: StoreState): Bed[] {
+/** Сколько грядок: новое поле beds, у старого сохранения - первая плюс more. Мусор из сохранения не берём. */
+export function bedCount(state: StoreState): number {
   const g = state.garden;
-  if (!g) return [];
-  const more = (Array.isArray(g.more) ? g.more : []).filter((b) => b && isCrop(b.crop) && Number.isFinite(b.since)).slice(0, BEDS_MAX - 1);
-  return [{ crop: isCrop(g.crop) ? g.crop : 'mix', since: g.since }, ...more];
+  if (!g) return 0;
+  const n = Number.isFinite(g.beds) ? Math.floor(g.beds!) : 1 + (Array.isArray(g.more) ? g.more.filter((b) => b && typeof b === 'object').length : 0);
+  return Math.max(1, Math.min(BEDS_MAX, n));
 }
 
-const withBeds = (g: GardenState, beds: Bed[]): GardenState => {
-  const [first, ...more] = beds;
-  const next: GardenState = { ...g, since: first.since };
-  if (first.crop === 'mix') delete next.crop;
-  else next.crop = first.crop;
-  if (more.length) next.more = more;
-  else delete next.more;
-  return next;
-};
+/** Сколько приносит одна грядка за вечер (по помещению в Центре - и когда хозяин в Заречье, как аренда). */
+export const bedIncome = (state: StoreState): number => YARD_PER_BED * (homeLevel(state) + 1);
+/** Сколько двор принесёт сегодня вечером: грядки × ставка; двора нет - 0. */
+export const yardIncome = (state: StoreState): number => bedCount(state) * bedIncome(state);
 
-export const growMs = (crop: CropId): number => CROPS[crop].hours * 3600_000;
-
-/** Поставить теплицу. null — рано, уже стоит, не хватает денег или мы в Заречье. */
-export function buildGarden(state: StoreState, now: number): StoreState | null {
+/** Поставить теплицу. null - рано, уже стоит, не хватает денег или мы в Заречье. */
+export function buildGarden(state: StoreState): StoreState | null {
   if (hasGarden(state) || inZar(state) || state.day < GARDEN_FROM_DAY || state.money < GARDEN_PRICE) return null;
-  return { ...state, money: state.money - GARDEN_PRICE, garden: { since: now, harvests: 0 } };
+  return { ...state, money: state.money - GARDEN_PRICE, garden: { beds: 1 } };
 }
 
-/** Насколько выросла грядка: 0…1. Часы перевели назад — рост не уходит в минус. */
-export const bedProgress = (bed: Bed, now: number): number => Math.min(1, Math.max(0, (now - bed.since) / growMs(bed.crop)));
-export const bedRipe = (bed: Bed, now: number): boolean => bedProgress(bed, now) >= 1;
-/** Стадия для картинки: 0 — только посадили, 1 — ростки, 2 — кусты, 3 — созрело. */
-export const bedStage = (bed: Bed, now: number): number => (bedRipe(bed, now) ? 3 : Math.min(2, Math.floor(bedProgress(bed, now) * 3)));
-export const bedLeft = (bed: Bed, now: number): number => Math.max(0, bed.since + growMs(bed.crop) - now);
+export const nextBedCost = (state: StoreState): number | null => (hasGarden(state) ? (BED_COSTS[bedCount(state) - 1] ?? null) : null);
 
-/** Самая спелая грядка — по ней значок в мире и строка в меню. */
-export const gardenProgress = (state: StoreState, now: number): number => bedsOf(state).reduce((best, bed) => Math.max(best, bedProgress(bed, now)), 0);
-/** Есть что собрать: созрела хотя бы одна грядка. */
-export const gardenRipe = (state: StoreState, now: number): boolean => bedsOf(state).some((bed) => bedRipe(bed, now));
-export const gardenStage = (state: StoreState, now: number): number => bedsOf(state).reduce((best, bed) => Math.max(best, bedStage(bed, now)), 0);
-/** Сколько осталось до ближайшего урожая, мс (0 — уже созрел или теплицы нет). */
-export const gardenLeft = (state: StoreState, now: number): number => {
-  const beds = bedsOf(state);
-  return beds.length ? Math.min(...beds.map((bed) => bedLeft(bed, now))) : 0;
-};
-/** Когда поспеет ближайшая грядка (мс по часам игрока; уже спелая — её время): для напоминания бота. 0 — теплицы нет. */
-export const gardenRipeAt = (state: StoreState): number => {
-  const beds = bedsOf(state);
-  return beds.length ? Math.min(...beds.map((bed) => bed.since + growMs(bed.crop))) : 0;
-};
+/** Двор в новом виде: число грядок, вчера и всего; старые поля (урожай по часам) уходят. */
+const tidy = (g: GardenState, beds: number): GardenState => ({ beds, ...(g.last ? { last: g.last } : {}), ...(g.total ? { total: g.total } : {}) });
 
-/** Урожай с грядки каждого вида: в большом магазине теплица больше. */
-export const cropQty = (state: StoreState, crop: CropId = 'mix'): number => CROPS[crop].base + CROPS[crop].perLevel * state.level;
-
-/** Сменить культуру на грядке: рассада сажается заново. null — нет такой грядки или культура та же. */
-export function plant(state: StoreState, index: number, crop: CropId, now: number): StoreState | null {
-  const beds = bedsOf(state);
-  if (inZar(state) || !state.garden || !beds[index] || beds[index].crop === crop) return null;
-  return { ...state, garden: withBeds(state.garden, beds.map((bed, i) => (i === index ? { crop, since: now } : bed))) };
-}
-
-export const nextBedCost = (state: StoreState): number | null => (hasGarden(state) ? (BED_COSTS[bedsOf(state).length - 1] ?? null) : null);
-
-/** Вскопать ещё одну грядку. null — теплицы нет, грядок уже три или не хватает денег. */
-export function addBed(state: StoreState, now: number): StoreState | null {
+/** Вскопать ещё одну грядку. null - теплицы нет, грядок уже три, не хватает денег или мы в Заречье. */
+export function addBed(state: StoreState): StoreState | null {
   const cost = nextBedCost(state);
   if (inZar(state) || !state.garden || cost === null || state.money < cost) return null;
-  return { ...state, money: state.money - cost, garden: withBeds(state.garden, [...bedsOf(state), { crop: 'quick', since: now }]) };
+  return { ...state, money: state.money - cost, garden: tidy(state.garden, bedCount(state) + 1) };
 }
 
-/** Друг полил: все грядки, что ещё растут, на час ближе к урожаю. null — поливать нечего. */
-export function water(state: StoreState, now: number, times = 1): StoreState | null {
-  if (!state.garden || times <= 0) return null;
-  const beds = bedsOf(state);
-  if (beds.every((bed) => bedRipe(bed, now))) return null;
-  const next = beds.map((bed) => (bedRipe(bed, now) ? bed : { ...bed, since: bed.since - WATER_MS * times }));
-  return { ...state, garden: { ...withBeds(state.garden, next), watered: (state.garden.watered ?? 0) + times } };
+/** Вечер: бабушка продала урожай - деньги в кассу до счетов (day.ts), как аренда; запоминаем «вчера» и «всего». */
+export function yardNight(state: StoreState): { state: StoreState; income: number } {
+  const income = yardIncome(state);
+  if (!income || !state.garden) return { state, income: 0 };
+  const garden: GardenState = { beds: bedCount(state), last: { day: state.day, n: income }, total: (state.garden.total ?? 0) + income };
+  return { state: { ...state, money: state.money + income, garden }, income };
 }
 
-/** Варенье своей марки сейчас варят из своих яблок (lines.ts поднимает спрос, меню об этом пишет). */
-export const ownJam = (state: StoreState): boolean => (state.garden?.own ?? 0) >= state.day && (state.lines?.jam ?? 0) > 0;
-
-/** Сколько ещё влезет на полки, куда ставят этот товар (овощной прилавок). */
-export const shelfRoomFor = (state: StoreState, id: ProductId): number =>
-  state.shelves.reduce((sum, shelf) => sum + (canPlace(id, shelf) ? Math.max(0, shelfFree(shelf)) : 0), 0);
-
-/** Поставить свежие штуки прямо на подходящие полки, по порядку; сколько встало. */
-function putOnShelves(state: StoreState, id: ProductId, qty: number): { state: StoreState; put: number } {
-  let left = qty;
-  const shelves = state.shelves.map((shelf) => {
-    const room = canPlace(id, shelf) ? Math.min(left, Math.max(0, shelfFree(shelf))) : 0;
-    if (room <= 0) return shelf;
-    left -= room;
-    return { ...shelf, items: { ...shelf.items, [id]: [...(shelf.items[id] ?? []), ...Array.from({ length: room }, () => ({ age: 0 }))] } };
-  });
-  return left === qty ? { state, put: 0 } : { state: { ...state, shelves }, put: qty - left };
+/** Что принёс двор в прошлый вечер (null - вчера не платил) и всего: для карточки в «Развитии». */
+export function yardLog(state: StoreState): { last: number; total: number } | null {
+  const log = state.garden?.last;
+  return log && log.day === state.day - 1 ? { last: log.n, total: state.garden?.total ?? log.n } : null;
 }
+
+/** Варенье своей марки варят из своих яблок (lines.ts поднимает спрос, меню об этом пишет): двор есть и линейка открыта. */
+export const ownJam = (state: StoreState): boolean => hasGarden(state) && (state.lines?.jam ?? 0) > 0;
 
 /**
- * Собрать урожай со всех спелых грядок: бабушка несёт его прямо на овощной прилавок, бесплатно, склад не трогает
- * (11.11, просьба автора: урожай забивал склад и вытеснял закупку). Ставится сколько влезет на полки; грядка, с которой
- * ничего не встало, ждёт. Рассада сажается заново.
- * null — ничего не созрело, мы в Заречье или на прилавке нет ни одного места (урожай подождёт).
+ * Стадия грядок на картинке по ходу игрового дня (progress 0…1): утром ростки, днём кусты, к вечеру спело -
+ * вечером бабушка собирает урожай и продаёт, наутро всё сначала.
  */
-export function harvest(state: StoreState, now: number): { state: StoreState; got: { id: ProductId; qty: number }[] } | null {
-  if (inZar(state) || !state.garden || !gardenRipe(state, now)) return null;
-  const sell = sellableProducts(state);
-  let next = state;
-  const got: { id: ProductId; qty: number }[] = [];
-  const beds = bedsOf(state).map((bed) => {
-    if (!bedRipe(bed, now)) return bed;
-    let took = false;
-    for (const id of CROPS[bed.crop].gives.filter((crop) => sell.includes(crop))) {
-      const placed = putOnShelves(next, id, cropQty(state, bed.crop));
-      if (!placed.put) continue;
-      next = placed.state;
-      took = true;
-      const same = got.find((g) => g.id === id);
-      if (same) same.qty += placed.put;
-      else got.push({ id, qty: placed.put });
-    }
-    return took ? { ...bed, since: now } : bed;
-  });
-  if (!got.length) return null;
-  const garden: GardenState = { ...withBeds(state.garden, beds), harvests: state.garden.harvests + 1 };
-  if (got.some((g) => g.id === 'apples')) garden.own = state.day + OWN_JAM_DAYS - 1;
-  return { state: { ...next, garden }, got };
-}
+export const yardStage = (progress: number): number => 1 + Math.max(0, Math.min(2, Math.floor(progress * 3)));
 
-/** Что видно в мире: грядки, их культуры и стадии. Изменилось — сцена перерисовывает двор. */
-export const gardenLook = (state: StoreState, now: number): string =>
-  inZar(state) || !state.garden
-    ? ''
-    : `g${bedsOf(state)
-        .map((bed) => `${bed.crop[0]}${bedStage(bed, now)}`)
-        .join('')}`;
+/** Что видно в мире: сколько грядок и стадия. Изменилось - сцена перерисовывает двор. */
+export const gardenLook = (state: StoreState, progress: number): string => (inZar(state) || !state.garden ? '' : `g${bedCount(state)}:${yardStage(progress)}`);
