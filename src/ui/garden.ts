@@ -3,11 +3,14 @@
 
 import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
-import { addBed, BED_CROPS, bedCount, bedIncome, buildGarden, CROP_ICON, GARDEN_PRICE, gardenVisible, hasGarden, nextBedCost, ownJam, yardLog } from '../game/garden';
+import { addBed, BED_CROPS, bedCount, bedIncome, buildGarden, CROP_ICON, GARDEN_PRICE, gardenVisible, hasGarden, nextBedCost, ownJam, yardIncome, yardLog } from '../game/garden';
 import { track } from '../platform/analytics';
 import { button, el, toast } from './dom';
 
 type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') => void;
+
+/** Строка свёрнутого раздела в «Развитии»: сколько грядок и сколько двор приносит за вечер. */
+export const gardenSummary = (state: StoreState): string => t('garden.fold', { n: bedCount(state), sum: yardIncome(state) });
 
 export function gardenBox(state: StoreState, getState: () => StoreState, update: Update): HTMLElement[] {
   if (!gardenVisible(state)) return [];

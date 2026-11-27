@@ -4435,6 +4435,7 @@ export const en: Record<TextKey, string> = {
   "garden.yard": "Grandma's yard",
   "garden.empty": "A greenhouse will stand here — see “Growth”",
   "garden.tap": "🌱 +{n} 💰 every evening",
+  "garden.fold": "Beds: {n} · +{sum} 💰 every evening",
   "garden.bed": "Bed {n}",
   "garden.crop.quick": "potatoes",
   "garden.crop.mix": "apples and potatoes",

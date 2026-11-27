@@ -4400,6 +4400,7 @@ export const pt: Record<TextKey, string> = {
   "garden.yard": "Quintal da vovó",
   "garden.empty": "Aqui vai ficar a estufa — veja em “Crescimento”",
   "garden.tap": "🌱 +{n} 💰 toda noite",
+  "garden.fold": "Canteiros: {n} · +{sum} 💰 toda noite",
   "garden.bed": "Canteiro {n}",
   "garden.crop.quick": "batatas",
   "garden.crop.mix": "maçãs e batatas",

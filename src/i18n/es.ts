@@ -4390,6 +4390,7 @@ export const es: Record<TextKey, string> = {
   "garden.yard": "Huerto de la abuela",
   "garden.empty": "Aquí irá el invernadero: mira en «Desarrollo»",
   "garden.tap": "🌱 +{n} 💰 cada tarde",
+  "garden.fold": "Bancales: {n} · +{sum} 💰 cada tarde",
   "garden.bed": "Bancal {n}",
   "garden.crop.quick": "patatas",
   "garden.crop.mix": "manzanas y patatas",

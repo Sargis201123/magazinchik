@@ -4433,6 +4433,7 @@ export const ru = {
   "garden.yard": "Бабушкин двор",
   "garden.empty": "Здесь встанет теплица — загляни в «Развитие»",
   "garden.tap": "🌱 +{n} 💰 каждый вечер",
+  "garden.fold": "Грядок: {n} · +{sum} 💰 каждый вечер",
   "garden.bed": "Грядка {n}",
   "garden.crop.quick": "картошка",
   "garden.crop.mix": "яблоки и картошка",

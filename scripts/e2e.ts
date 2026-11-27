@@ -361,11 +361,18 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     await snap(`${run.name}-menu-rental.png`);
     await page.evaluate(() => document.querySelector<HTMLElement>('.ui-tab[data-tab="grow"]')?.click());
     await tick(400);
-    await page.evaluate((title) => {
-      const head = [...document.querySelectorAll<HTMLElement>('.ui-fold-head')].find((h) => h.innerText.includes(title));
-      if (head?.querySelector('.ui-fold-arrow')?.textContent?.startsWith('▸')) head.click();
-      head?.scrollIntoView({ block: 'center' });
-    }, text['garden.title']);
+    const yardHead = (open: boolean) =>
+      page.evaluate(
+        ([title, open]) => {
+          const head = [...document.querySelectorAll<HTMLElement>('.ui-fold-head')].find((h) => h.innerText.includes(title as string));
+          if (open && head?.querySelector('.ui-fold-arrow')?.textContent?.startsWith('▸')) head.click();
+          head?.scrollIntoView({ block: 'center' });
+        },
+        [text['garden.title'], open] as const,
+      );
+    await yardHead(false);
+    await snap(`${run.name}-menu-yard-fold.png`);
+    await yardHead(true);
     await snap(`${run.name}-menu-yard.png`);
     await page.evaluate(() => document.querySelector<HTMLElement>('.ui-tab[data-tab="buy"]')?.click());
     await tick(400);
@@ -484,6 +491,12 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     const s = await forward((s) => !s.dayOpen || s.night || DAY_SECONDS - s.timeLeft >= p * DAY_SECONDS, `${Math.round(p * 100)}% дня`, DAY_SECONDS * 1000);
     if (!s.dayOpen || s.night) throw new Error(`день кончился раньше кадра «${name}»`);
     await shot(name);
+  }
+  // YARD=1: кнопка «🌱» - камера у бабушкиного двора (грядки к вечеру, огородник).
+  if (process.env.YARD) {
+    await page.evaluate(() => document.querySelector<HTMLElement>('.ui-yard')?.click());
+    await tick(900);
+    await shot('yard');
   }
   if (process.env.FLOORSHOT && run.name.startsWith('fl')) {
     for (const id of ['basement', 'second', 'third']) {

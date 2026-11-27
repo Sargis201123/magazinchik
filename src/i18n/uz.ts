@@ -4399,6 +4399,7 @@ export const uz: Record<TextKey, string> = {
   "garden.yard": "Buvining hovlisi",
   "garden.empty": "Bu yerda issiqxona boʻladi — «Rivojlanish»ga qara",
   "garden.tap": "🌱 Har kech +{n} 💰",
+  "garden.fold": "Joʻyaklar: {n} · har kech +{sum} 💰",
   "garden.bed": "{n}-joʻyak",
   "garden.crop.quick": "kartoshka",
   "garden.crop.mix": "olma va kartoshka",

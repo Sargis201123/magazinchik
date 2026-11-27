@@ -4397,6 +4397,7 @@ export const kk: Record<TextKey, string> = {
   "garden.yard": "Әженің ауласы",
   "garden.empty": "Мұнда жылыжай тұрады — «Даму» бөліміне қара",
   "garden.tap": "🌱 Әр кеш +{n} 💰",
+  "garden.fold": "Жүйек: {n} · әр кеш +{sum} 💰",
   "garden.bed": "{n}-жүйек",
   "garden.crop.quick": "картоп",
   "garden.crop.mix": "алма мен картоп",

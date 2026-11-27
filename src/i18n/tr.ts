@@ -4390,6 +4390,7 @@ export const tr: Record<TextKey, string> = {
   "garden.yard": "Ninenin bahçesi",
   "garden.empty": "Buraya sera kurulacak — “Gelişim”e bak",
   "garden.tap": "🌱 Her akşam +{n} 💰",
+  "garden.fold": "Tarh: {n} · her akşam +{sum} 💰",
   "garden.bed": "Tarh {n}",
   "garden.crop.quick": "patates",
   "garden.crop.mix": "elma ve patates",
