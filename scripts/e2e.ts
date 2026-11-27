@@ -21,6 +21,7 @@
 //   --only <имя>        только один прогон: l5, rain, l3, l2, l6, pl4
 //   --threshold <доля>  какая доля точек кадра может отличаться от эталона (по умолчанию 0)
 //   --port <номер>      порт своего сервера (по умолчанию 4173, занят — возьмёт следующий)
+//   DAY=134             другой игровой день в любом прогоне (погода и сезон по дню: снег 134, дождь 116, жара 163)
 //   FLOORSHOT=1         ещё прогоны flbare и flfull: все этажи открыты (голые / отделанные), кадр каждого этажа
 // Нужен Playwright с Chromium: npm i -D playwright && npx playwright install chromium
 // (свой Chromium — переменная CHROMIUM_PATH).
@@ -353,7 +354,7 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     for (const [k, v] of Object.entries(sh.items ?? {})) { const take = (v as unknown[]).slice(0, Math.max(0, left)); left -= take.length; items[k] = take; }
     return { ...sh, level: shelfLvl, items };
   });
-  const state = { ...save.state, gift: { lastDate: day, streak: 1 }, ...run.patch(save.state), ...(shelfLvl !== null ? { shelves: trimShelves(save.state.shelves as any[]) } : {}), ...(process.env.REG ? { registers: Number(process.env.REG) } : {}), ...(process.env.AUTO ? { autoOrder: { on: true } } : {}) };
+  const state = { ...save.state, gift: { lastDate: day, streak: 1 }, ...run.patch(save.state), ...(shelfLvl !== null ? { shelves: trimShelves(save.state.shelves as any[]) } : {}), ...(process.env.REG ? { registers: Number(process.env.REG) } : {}), ...(process.env.AUTO ? { autoOrder: { on: true } } : {}), ...(process.env.DAY ? { day: Number(process.env.DAY), plan: undefined } : {}) };
   await page.addInitScript(prepare, {
     save: JSON.stringify({ ...save, state }),
     seed: SEED,
