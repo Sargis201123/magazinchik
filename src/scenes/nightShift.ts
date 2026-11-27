@@ -49,7 +49,7 @@ import { fpsSummary } from '../platform/quality';
 import { BOX_FROM_DAY, BOX_OPENS_DAY, firstDayGift, gentleDay, grannyBox, grannyStays, learningEvening, quietRating } from '../game/firstday';
 import { tomorrowTeaser } from '../game/nudge';
 import { teaserText } from '../ui/nudge';
-import { vanResultText } from '../ui/vanText';
+import { vanEventName, vanResultText, vanRoadText } from '../ui/vanText';
 import { lotteryDay, WIN_BONUS } from '../game/lottery';
 import { ART, TUTORIAL_DAYS, FACADE_H, LIGHT_DEPTH, nightGuestLook } from './common';
 import * as starPets from './starPets';
@@ -352,9 +352,12 @@ export function finishDay(scene: StoreScene): void {
   if (rent) extra.push([t('tenant.summary'), t('branch.summaryValue', { n: rent })]);
   // Лавки скупленной улицы (estate.ts): аренда за день одной строкой.
   if (night.estate) extra.push([t('estate.summary'), t('branch.summaryValue', { n: night.estate })]);
-  // Выезд фургона (van.ts): что продал, случай в дороге, что привёз назад, итого.
+  // Выезд фургона (van.ts, 27.11 ездит сам): что продал, товар, бензин, итого; случай в дороге — своей строкой
+  // (утренней новости с «Ясно» больше нет). Сумма с названием события — в «Прочих доходах».
   if (night.van) {
     extra.push([t('van.summary'), vanResultText(night.van)]);
+    const road = vanRoadText(night.van);
+    if (road) extra.push([`🚐 ${t('van.res.road')}`, road]);
     track('van_trip', finishedDay, night.van.net);
   }
   // Лотерея (game/lottery.ts, 15.11): сколько билетов взяли, доля магазина, сколько выиграло, крупный тираж.
@@ -499,7 +502,8 @@ export function finishDay(scene: StoreScene): void {
         shortfall,
         total: state.money,
         housewarming: Boolean(bill?.housewarming),
-        other: otherIncome(night).map((r): [string, number] => [t(INCOME_KEYS[r.id]), r.n]),
+        // Фургон — с названием события: «🚐 Свадьба в соседнем районе +870».
+        other: otherIncome(night).map((r): [string, number] => [r.id === 'van' && night.van ? `🚐 ${vanEventName(scene.state, night.van.event)}` : t(INCOME_KEYS[r.id]), r.n]),
         expected,
         passTip: scene.stats.passed ? queueAdviceKey(scene.state) : undefined,
       },

@@ -1,16 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { emptyDayStats, newGame, type StoreState } from '../src/game/economy';
+import { billTotal, emptyDayStats, monthlyBill, newGame, type StoreState } from '../src/game/economy';
 import { buyFloor, finishFloor, floorAvailable, floorLock, FLOORS, hasFloor, openFloors } from '../src/game/floors';
 import {
-  BATCH,
   BUY_SHARE,
-  batchCost,
-  batchSize,
-  buyBatch,
   CLERK_WAGE,
+  clothesMorning,
   clothesNight,
   clothesOf,
   clothesPlan,
+  clothesReserve,
+  clothesToday,
   collectionFor,
   COLLECTION_DEFS,
   FINISH_BOOST,
@@ -20,9 +19,9 @@ import {
   RACK_PLACES,
   rackPlaces,
   SALE_OFF,
+  salePrice,
   seasonDaysLeft,
   setClerk,
-  setSale,
   weatherFit,
   type ClothesState,
 } from '../src/game/clothes';
@@ -31,8 +30,9 @@ import { guestsToday, nightCycle } from '../src/game/day';
 import { pendingTip, TIP_ICONS, type TipId } from '../src/game/tips';
 import { simulate } from '../src/game/simulate';
 
-// Второй этаж — магазин одежды (floors.ts + clothes.ts, 13.11): коллекции по сезону, закупка партиями, вечерние
-// продажи от гостей и погоды, распродажа остатков, продавец-консультант. Всё — от зерна и дня; старые сохранения — без изменений.
+// Второй этаж — магазин одежды (floors.ts + clothes.ts, 13.11): коллекции по сезону, вечерние продажи от гостей и погоды,
+// продавец-консультант. 27.11: стойки пополняются сами каждое утро (сверх прогноза счетов), распродажа остатков — сама.
+// Всё — от зерна и дня; старые сохранения — без изменений.
 
 /** День 60 — лето (месяц 8 из 16): на стойках футболки и шорты. */
 const shop = (over: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 60, level: 3, money: 30000, debt: 0, rating: 4.5, seed: 7, ...over });
@@ -66,7 +66,7 @@ describe('старое сохранение', () => {
     expect(clothesOf(old)).toBeNull();
     expect(clothesNight(old, 100)).toEqual({ state: old, day: null });
     expect(nightCycle(old, emptyDayStats(), () => 0.5).clothes).toBeNull();
-    expect(buyBatch(old)).toBeNull();
+    expect(clothesMorning(old)).toBe(old);
   });
 
   it('кривые поля в сохранении не ломают этаж', () => {
@@ -123,28 +123,58 @@ describe('коллекции по сезону', () => {
   });
 });
 
-describe('закупка партиями', () => {
-  it('партия текущей коллекции: деньги сразу, вещи на стойки', () => {
-    const s = buyBatch(upstairs())!;
-    expect(s.money).toBe(30000 - BATCH * COLLECTION_DEFS.summer.cost);
-    expect(clothesOf(s)?.stock).toEqual({ summer: BATCH });
-    expect(freshStock(s)).toBe(BATCH);
+describe('завоз сам каждое утро', () => {
+  const cost = COLLECTION_DEFS.summer.cost;
+
+  it('стойки — до полных текущей коллекцией: деньги сразу, итог утра — в clothes.today', () => {
+    const s = upstairs();
+    const reserve = clothesReserve(s);
+    expect(reserve).toBe(billTotal(monthlyBill(s)));
+    const filled = clothesMorning(s);
+    expect(clothesOf(filled)?.stock).toEqual({ summer: RACK_PLACES[0] });
+    expect(freshStock(filled)).toBe(RACK_PLACES[0]);
+    expect(filled.money).toBe(30000 - RACK_PLACES[0] * cost);
+    expect(clothesToday(filled)).toEqual({ day: 60, n: RACK_PLACES[0], spent: RACK_PLACES[0] * cost });
   });
 
-  it('стойки не резиновые: последняя партия — сколько влезет; после ремонта мест больше', () => {
-    let s = upstairs({ stock: { rain: RACK_PLACES[0] - 4 } });
-    expect(batchSize(s)).toBe(4);
-    expect(batchCost(s)).toBe(4 * COLLECTION_DEFS.summer.cost);
-    s = buyBatch(s)!;
+  it('позвать снова — ничего не докупит; назавтра итог утра — с нуля', () => {
+    const filled = clothesMorning(upstairs());
+    expect(clothesMorning(filled)).toBe(filled);
+    const sold = { ...filled, day: 61, clothes: { ...filled.clothes, stock: { summer: RACK_PLACES[0] - 7 } } };
+    expect(clothesToday(sold)).toBeNull();
+    const next = clothesMorning(sold);
+    expect(clothesToday(next)).toEqual({ day: 61, n: 7, spent: 7 * cost });
+  });
+
+  it('в долг не берёт и деньги на счета не трогает: мало денег — сколько хватает', () => {
+    const reserve = clothesReserve(upstairs());
+    const tight = upstairs({}, { money: reserve + 5 * cost + 10 });
+    const some = clothesMorning(tight);
+    expect(clothesOf(some)?.stock).toEqual({ summer: 5 });
+    expect(some.money).toBe(reserve + 10);
+    const poor = upstairs({}, { money: reserve });
+    expect(clothesMorning(poor)).toBe(poor);
+    expect(clothesToday(poor)).toBeNull();
+  });
+
+  it('остатки прошлого сезона занимают места; после ремонта мест больше — докупает в тот же день', () => {
+    let s = clothesMorning(upstairs({ stock: { rain: RACK_PLACES[0] - 4 } }));
+    expect(clothesOf(s)?.stock).toEqual({ rain: RACK_PLACES[0] - 4, summer: 4 });
     expect(freePlaces(s)).toBe(0);
-    expect(buyBatch(s)).toBeNull();
-    s = finishFloor(s, 'second')!;
+    s = clothesMorning(finishFloor(s, 'second')!);
     expect(rackPlaces(s)).toBe(RACK_PLACES[1]);
-    expect(buyBatch(s)).not.toBeNull();
+    expect(freePlaces(s)).toBe(0);
+    expect(clothesToday(s)?.n).toBe(4 + RACK_PLACES[1] - RACK_PLACES[0]);
   });
 
-  it('без денег — нельзя', () => {
-    expect(buyBatch(upstairs({}, { money: BATCH * COLLECTION_DEFS.summer.cost - 1 }))).toBeNull();
+  it('открыли этаж — заполнить сразу (как делает меню «Этажи»)', () => {
+    const opened = clothesMorning(buyFloor(shop(), 'second')!);
+    expect(freshStock(opened)).toBe(RACK_PLACES[0]);
+  });
+
+  it('в Заречье этаж Центра закрыт — не завозит', () => {
+    const s = upstairs({}, { zar: { at: 'zar' } as StoreState['zar'] });
+    expect(clothesMorning(s)).toBe(s);
   });
 });
 
@@ -189,16 +219,17 @@ describe('вечер на этаже', () => {
     expect(clothesOf(setClerk(hired, false)!)?.clerk).toBeUndefined();
   });
 
-  it('остатки прошлого сезона: без распродажи пылятся, с ней уходят за полцены', () => {
+  it('остатки прошлого сезона уходят на распродажу сами — за полцены бирки, то есть по закупке', () => {
     const dusty = upstairs({ stock: { warm: 15 } });
     expect(oldStock(dusty)).toBe(15);
-    expect(clothesPlan(dusty, 300)).toEqual({ coll: 'summer', buyers: expect.any(Number), sold: 0, sale: 0, income: 0, wage: 0 });
-    expect(clothesOf(clothesNight(dusty, 300).state)?.stock).toEqual({ warm: 15 });
-    const sale = setSale(dusty, true)!;
-    const plan = clothesPlan(sale, 300)!;
+    const plan = clothesPlan(dusty, 300)!;
     expect(plan.sale).toBeGreaterThan(0);
-    expect(plan.income).toBe(plan.sale * Math.round(COLLECTION_DEFS.warm.price * SALE_OFF));
-    expect(clothesOf(clothesNight(sale, 300).state)?.stock?.warm).toBe(15 - plan.sale);
+    expect(salePrice(dusty, 'warm')).toBe(Math.round(COLLECTION_DEFS.warm.price * SALE_OFF));
+    expect(salePrice(dusty, 'warm')).toBe(COLLECTION_DEFS.warm.cost);
+    expect(plan.income).toBe(plan.sale * salePrice(dusty, 'warm'));
+    expect(clothesOf(clothesNight(dusty, 300).state)?.stock?.warm).toBe(15 - plan.sale);
+    // Старое сохранение с выключенной распродажей — всё равно распродаёт.
+    expect(clothesPlan(upstairs({ stock: { warm: 15 }, sale: false }), 300)).toEqual(plan);
   });
 
   it('в Заречье этаж Центра закрыт — вещи ждут', () => {

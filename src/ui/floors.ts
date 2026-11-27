@@ -1,6 +1,6 @@
 // Раздел «Этажи» во вкладке «Развитие» (game/floors.ts, game/basement.ts, 13.11): открыть этаж, отделать его и
-// обустроить то, что на нём живёт. Подвал — целиком здесь; второй этаж (одежда) — открыть здесь, стойки и партии —
-// своим блоком в ui/clothes.ts; третий этаж (фудкорт, game/foodcourt.ts) — открыть и отделать здесь, а точки еды и то,
+// обустроить то, что на нём живёт. Подвал — целиком здесь; второй этаж (одежда) — открыть здесь, стойки, распродажа и
+// продавец — своим блоком в ui/clothes.ts; третий этаж (фудкорт, game/foodcourt.ts) — открыть и отделать здесь, а точки еды и то,
 // что на нём случается за день, — в плитке «Фудкорт» вкладки «Уголки».
 // Автоматы подаём сухо: что дают и чем за них платишь (гости, облавы, «крыша») — рядом, одной строкой, без «азарта».
 
@@ -32,7 +32,7 @@ import { track } from '../platform/analytics';
 import { button, el, toast } from './dom';
 import { setItemIcon } from './sheet';
 import { clothesRows } from './clothes';
-import { clothesOf, stockTotal } from '../game/clothes';
+import { clothesMorning, clothesOf, stockTotal } from '../game/clothes';
 import { stallPlaces, stallsOf, STALL_PLACES } from '../game/foodcourt';
 import { pawnOf, pawnPlace, pawnSlots, pawnWaiting } from '../game/pawnshop';
 import { openPawnCard } from './pawnshop';
@@ -147,9 +147,12 @@ function openRow(state: StoreState, id: FloorId, getState: () => StoreState, upd
     button(
       t('floor.open', { cost: def.cost }),
       () => {
-        const next = buyFloor(getState(), id);
-        if (!next) return;
-        track('floor_open', next.day, def.cost);
+        const bought = buyFloor(getState(), id);
+        if (!bought) return;
+        track('floor_open', bought.day, def.cost);
+        // Второй этаж: стойки заполняются сразу, дальше — сами каждое утро (game/clothes.ts clothesMorning, 27.11).
+        const next = id === 'second' ? clothesMorning(bought) : bought;
+        if (next !== bought) track('clothes_auto', next.day, bought.money - next.money);
         toast('assets/ico_shop.png', t(look.name), t(look.opened));
         update(next, 'success');
       },

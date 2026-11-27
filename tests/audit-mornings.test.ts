@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { newGame, type StoreState, type Unit } from '../src/game/economy';
+import { newGame, type StoreState } from '../src/game/economy';
 import { catchUpTips, pendingTip, seeTip, type TipId } from '../src/game/tips';
 import { NEWS_KIND, pickNews, type NewsId } from '../src/game/headlines';
-import { autoLoad, buyVan, planTrip, settleVan, vanEvents, vanIncident, vanOutcome } from '../src/game/van';
+import { buyVan, settleVan, vanIncident, vanOutcome, vanTripOn } from '../src/game/van';
 import { archive, caseOrder, CASE_ARCHIVE, nextWeekly, type CaseRecord } from '../src/game/cases';
 
 // Аудит 14.11, утро: одна «Новое!» за утро, очередь новостей не съедают ломбард с делом недели,
@@ -95,7 +95,7 @@ describe('очередь новостей: истории для души дох
 
   it('прождавшая день история — раньше ломбарда и дела недели', () => {
     expect(pickNews(morning(40, ['life']), ['pawn', 'case', 'life']).id).toBe('life');
-    expect(pickNews(morning(40, ['van']), ['case', 'van']).id).toBe('van');
+    expect(pickNews(morning(40, ['echo']), ['case', 'echo']).id).toBe('echo');
   });
 
   it('свежая — по-прежнему после них; событие дня, главное и другие сроки — раньше прождавшей', () => {
@@ -113,16 +113,14 @@ describe('очередь новостей: истории для души дох
 });
 
 describe('мелочи аудита', () => {
-  const units = (n: number, age = 0): Unit[] => Array.from({ length: n }, () => ({ age }));
-
   it('неудачный выезд фургона уводит не в минус, а в долг', () => {
     let day = 20;
-    const base = (d: number): StoreState => ({ ...newGame(), day: d, level: 2, money: 10_000, debt: 0, seed: 7, warehouse: { water: units(10), juice: units(6) } });
-    while (!(vanEvents(base(day)).includes('beach') && vanIncident(base(day), 'beach') === 'rain')) day++;
-    const loaded = autoLoad(planTrip(buyVan(base(day))!, 'beach')!);
-    const net = vanOutcome(loaded)!.net;
+    const base = (d: number): StoreState => buyVan({ ...newGame(), day: d, level: 2, money: 10_000, debt: 0, seed: 7 })!;
+    // 27.11: фургон ездит сам — ищем день, когда он едет на пляж, а там дождь.
+    while (!(vanTripOn(base(day)) === 'beach' && vanIncident(base(day), 'beach') === 'rain')) day++;
+    const net = vanOutcome(base(day))!.net;
     expect(net).toBeLessThan(0);
-    const s = settleVan({ ...loaded, money: 5, debt: 100 }).state;
+    const s = settleVan({ ...base(day), money: 5, debt: 100 }).state;
     expect(s.money).toBe(0);
     expect(s.debt).toBe(100 - (5 + net));
   });
