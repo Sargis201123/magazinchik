@@ -1,14 +1,14 @@
 // Район (10.11, третий обход): то, что связывает игроков, у которых нет друзей в игре.
 // - «Магазин дня»: каждый день один настоящий магазин выбирается для всех (кроме его хозяина — он видит следующего).
 //   К нему можно зайти в гости и оставить отметку «Был тут»; хозяин утром узнаёт, сколько гостей у него было.
-// - Полить теплицу другу (src/game/garden.ts): раз в день каждому другу, его урожай поспеет на час раньше.
+// - Полив теплицы другу убран 27.11: двор теперь приносит деньги сам каждый вечер (src/game/garden.ts). Таблица waters
+//   в базе осталась как есть, её просто больше не читают и не пишут.
 // - Общая цель района: выручка всех магазинов за неделю (по счёту сервера, как в турнире) плюс «соседи» — придуманные
 //   магазины, чей вклад растёт с неделей (как соседи лиги). Набрали — каждый, кто торговал на этой неделе, забирает
 //   награду; выдаёт её игра (src/game/town.ts), как награду турнира.
 // Всё одним адресом: POST /api/town { initData, action }.
 
 import { ready } from './social.js';
-import { network } from './visits.js';
 import { weekOf } from './week.js';
 import { json, verifyInitData, type D1, type Env } from './telegram.js';
 import { GOAL_BASE, GOAL_PER_SHOP, goalNeighbours } from '../../src/game/town.js';
@@ -20,14 +20,9 @@ const weekStart = (week: number): number => (week * 7 - 3) * DAY;
 /** Магазином дня может стать тот, кто играл за столько дней и прожил хотя бы столько дней магазина. */
 const ACTIVE_DAYS = 14;
 const MIN_DAY = 3;
-/** Больше стольких поливов за раз не засчитываем. */
-const WATER_MAX = 5;
-
 const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS likes (sender INTEGER, receiver INTEGER, day INTEGER, seen INTEGER DEFAULT 0, PRIMARY KEY (sender, receiver, day))',
   'CREATE INDEX IF NOT EXISTS likes_receiver ON likes (receiver, seen)',
-  'CREATE TABLE IF NOT EXISTS waters (sender INTEGER, receiver INTEGER, day INTEGER, claimed INTEGER DEFAULT 0, PRIMARY KEY (sender, receiver, day))',
-  'CREATE INDEX IF NOT EXISTS waters_receiver ON waters (receiver, claimed)',
 ];
 
 const schemaReady = new WeakSet<D1>();
@@ -35,8 +30,8 @@ export async function townReady(db: D1): Promise<void> {
   await ready(db);
   if (schemaReady.has(db)) return;
   // Таблицы уже есть (база живёт дольше воркера) — не тратить запросы: у D1 предел на один вызов.
-  const known = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('likes', 'waters')").first<{ n: number }>();
-  if ((known?.n ?? 0) < 2) for (const sql of SCHEMA) await db.prepare(sql).run();
+  const known = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'likes'").first<{ n: number }>();
+  if ((known?.n ?? 0) < 1) for (const sql of SCHEMA) await db.prepare(sql).run();
   schemaReady.add(db);
 }
 
@@ -122,28 +117,22 @@ export async function goalOf(db: D1, me: number, week: number, now: number): Pro
 }
 
 /**
- * POST /api/town { initData, action: 'day' | 'shop' | 'like' | 'water', to?, garden? } →
- * day: { enabled, shop: DayShop | null, liked, likes, waters, goal, last? } — магазин дня, поставил ли я отметку, сколько
- *   новых отметок у меня (сервер отмечает показанными), сколько раз друзья полили (если garden — забираем), цель недели
- *   и прошлая неделя, если её цель набрали;
- * shop: { shop, name } — снимок магазина дня; like: { ok } — отметка «Был тут» (одна в день);
- * water: { ok } — полить теплицу другу to (раз в день каждому).
+ * POST /api/town { initData, action: 'day' | 'shop' | 'like' } →
+ * day: { enabled, shop: DayShop | null, liked, likes, goal, last? } — магазин дня, поставил ли я отметку, сколько
+ *   новых отметок у меня (сервер отмечает показанными), цель недели и прошлая неделя, если её цель набрали;
+ * shop: { shop, name } — снимок магазина дня; like: { ok } — отметка «Был тут» (одна в день).
+ * Старая игра ещё может прислать action: 'water' — ответ { ok: false }, ничего не пишем.
  */
 export async function town(request: Request, env: Env, now = Date.now()): Promise<Response> {
   const token = env.BOT_TOKEN ?? '';
   const db = env.DB;
   if (!token || !db) return json({ enabled: false });
-  const body = (await request.json().catch(() => ({}))) as { initData?: string; action?: string; to?: number; garden?: boolean };
+  const body = (await request.json().catch(() => ({}))) as { initData?: string; action?: string };
   const user = await verifyInitData(body.initData ?? '', token);
   if (!user) return json({ error: 'bad_init_data' }, 401);
   await townReady(db);
   const me = user.id;
-  if (body.action === 'water') {
-    const to = Number(body.to);
-    if (!(await network(db, me, now - ACTIVE_DAYS * DAY)).some((f) => f.id === to)) return json({ ok: false });
-    const res = await db.prepare('INSERT OR IGNORE INTO waters (sender, receiver, day) VALUES (?, ?, ?)').bind(me, to, today(now)).run();
-    return json({ ok: (res.meta?.changes ?? 0) > 0 });
-  }
+  if (body.action === 'water') return json({ ok: false });
   const pick = await dayShopFor(db, me, now);
   if (body.action === 'like') {
     if (!pick) return json({ ok: false });
@@ -161,9 +150,8 @@ export async function town(request: Request, env: Env, now = Date.now()): Promis
     return json({ shop, name: pick?.name ?? '' });
   }
   const liked = pick ? Boolean(await db.prepare('SELECT 1 AS x FROM likes WHERE sender = ? AND receiver = ? AND day = ?').bind(me, pick.id, today(now)).first<{ x: number }>()) : false;
-  // Новые отметки и поливы — одним запросом каждый: два одновременных запуска не получат их дважды.
+  // Новые отметки — одним запросом: два одновременных запуска не получат их дважды.
   const likes = (await db.prepare('UPDATE likes SET seen = 1 WHERE receiver = ? AND seen = 0 RETURNING sender').bind(me).all<{ sender: number }>()).results.length;
-  const waters = body.garden ? (await db.prepare('UPDATE waters SET claimed = 1 WHERE receiver = ? AND claimed = 0 RETURNING sender').bind(me).all<{ sender: number }>()).results.length : 0;
   const week = weekOf(now);
   const goal = await goalOf(db, me, week, now);
   const last = await goalOf(db, me, week - 1, now);
@@ -172,7 +160,6 @@ export async function town(request: Request, env: Env, now = Date.now()): Promis
     shop: pick,
     liked,
     likes: Math.min(99, likes),
-    waters: Math.min(WATER_MAX, waters),
     goal,
     ...(last.mine && last.total >= last.target ? { last: { week: last.week } } : {}),
   });

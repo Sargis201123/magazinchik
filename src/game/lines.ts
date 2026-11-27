@@ -9,6 +9,7 @@ import { yearTime, type YearTime } from './calendar';
 import { canPlace, onShift, productAvailable, PRODUCTS, shelfFree, warehouseCapacity, warehouseCount, type ProductId, type StoreState, type Unit, normalizeShelves } from './economy';
 import { hasUpgrade } from './upgrades';
 import { usualSales } from './bakery';
+import { OWN_JAM_DEMAND } from './garden';
 import type { TextKey } from '../i18n/ru';
 
 export type LineId = 'jam' | 'pickles' | 'pelmeni' | 'kvass';
@@ -103,8 +104,9 @@ export function lineDemand(state: StoreState, id: ProductId, own: boolean): numb
   const line = lineOfProduct(id);
   if (!line) return fame;
   const tier = lineTier(state, line);
-  // Варенье из яблок со своей грядки (garden.ts, OWN_JAM_DEMAND): пару дней после сбора его берут охотнее.
-  const garden = line === 'jam' && tier > 0 && (state.garden?.own ?? 0) >= state.day ? 1.2 : 1;
+  // Варенье из яблок со своей грядки (garden.ts, OWN_JAM_DEMAND): пока стоит двор, его берут охотнее (27.11: раньше -
+  // пару дней после сбора урожая).
+  const garden = line === 'jam' && tier > 0 && state.garden ? OWN_JAM_DEMAND : 1;
   return fame * (1 + LINE_DEMAND_STEP * Math.max(0, tier - 1)) * (SEASON_DEMAND[line]?.[yearTime(state.day)] ?? 1) * garden;
 }
 

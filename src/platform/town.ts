@@ -1,4 +1,4 @@
-// Район (api/_lib/town.ts): «Магазин дня», отметки «Был тут», полив теплицы другу и общая цель недели.
+// Район (api/_lib/town.ts): «Магазин дня», отметки «Был тут» и общая цель недели (полив теплицы другу убран 27.11).
 // Данные приходят при запуске игры (loadMultiplayer) и лежат здесь; утро берёт их отсюда. Без Telegram или базы — null.
 
 import { telegramInitData } from './telegram';
@@ -25,9 +25,8 @@ export interface TownInfo {
   shop: DayShop | null;
   /** Я уже оставил отметку в магазине дня. */
   liked: boolean;
-  /** Сколько новых отметок оставили у меня (сервер уже отметил их показанными) и сколько раз полили теплицу. */
+  /** Сколько новых отметок оставили у меня (сервер уже отметил их показанными). */
   likes: number;
-  waters: number;
   goal: TownGoal;
   /** Прошлая неделя: цель набрали, а я торговал — награду можно забрать. */
   last?: { week: number };
@@ -35,20 +34,19 @@ export interface TownInfo {
 
 let cache: TownInfo | null = null;
 export const townInfo = (): TownInfo | null => cache;
-/** Отметки и поливы забираются один раз: после этого в памяти — ноль. */
-export function takeTownGifts(): { likes: number; waters: number } {
-  const out = { likes: cache?.likes ?? 0, waters: cache?.waters ?? 0 };
-  if (cache) cache = { ...cache, likes: 0, waters: 0 };
+/** Отметки забираются один раз: после этого в памяти — ноль. */
+export function takeTownGifts(): { likes: number } {
+  const out = { likes: cache?.likes ?? 0 };
+  if (cache) cache = { ...cache, likes: 0 };
   return out;
 }
 
 const int = (v: unknown, max: number): number => Math.max(0, Math.min(max, Math.round(Number(v) || 0)));
 
-/** garden — у игрока есть теплица: тогда сервер отдаёт (и списывает) поливы друзей. */
-export async function fetchTown(garden: boolean): Promise<TownInfo | null> {
+export async function fetchTown(): Promise<TownInfo | null> {
   const initData = telegramInitData();
   if (!initData) return null;
-  const res = await post<Partial<TownInfo> & { enabled?: boolean }>('/api/town', { initData, action: 'day', garden });
+  const res = await post<Partial<TownInfo> & { enabled?: boolean }>('/api/town', { initData, action: 'day' });
   if (!res?.enabled || !res.goal) {
     cache = null;
     return null;
@@ -59,7 +57,6 @@ export async function fetchTown(garden: boolean): Promise<TownInfo | null> {
     liked: Boolean(res.liked),
     // Не забранное с прошлого ответа не теряем: сервер уже списал, а игра могла ещё не показать.
     likes: int(res.likes, 99) + (cache?.likes ?? 0),
-    waters: int(res.waters, 5) + (cache?.waters ?? 0),
     goal: { week: int(res.goal.week, 1e6), total: int(res.goal.total, 1e12), target: Math.max(1, int(res.goal.target, 1e12)), left: int(res.goal.left, 7), mine: Boolean(res.goal.mine) },
     ...(res.last && Number.isFinite(Number(res.last.week)) ? { last: { week: int(res.last.week, 1e6) } } : {}),
   };
@@ -80,17 +77,5 @@ export async function likeDayShop(): Promise<boolean> {
   if (!initData) return false;
   const res = await post<{ ok?: boolean }>('/api/town', { initData, action: 'like' });
   if (cache) cache = { ...cache, liked: true };
-  return Boolean(res?.ok);
-}
-
-const watered = new Set<number>();
-/** Сегодня этому другу уже поливали (в этом запуске игры). */
-export const wateredToday = (id: number): boolean => watered.has(id);
-/** Полить теплицу другу: раз в день каждому. false — уже поливал или нет связи. */
-export async function waterFriend(id: number): Promise<boolean> {
-  const initData = telegramInitData();
-  if (!initData) return false;
-  const res = await post<{ ok?: boolean }>('/api/town', { initData, action: 'water', to: id });
-  watered.add(id);
   return Boolean(res?.ok);
 }

@@ -1,8 +1,7 @@
 // Стойка проката у входа (game/rental.ts, 13.11): на тротуаре у бордюра, рядом с торговцем, но не на нём.
-// На стойке — вещи дня: велосипеды и самокаты, санки и ватрушки или зонты на крючках (art/rental.py); сколько их
-// видно — по запасу. Днём прохожие подходят, берут вещь и уходят с ней: санки и ватрушку тянут за собой, зонт
-// раскрывают над головой, на самокате и велосипеде уезжают; погодя возвращают — вещь снова на стойке. Кто не
-// вернёт (столько, сколько посчитала игра на вечер), тот не приходит: место на стойке так и пустеет до утра.
+// На стойке — вещи дня: велосипеды и самокаты, санки и ватрушки или зонты на крючках (art/rental.py). Днём прохожие
+// подходят, берут вещь и уходят с ней: санки и ватрушку тянут за собой, зонт раскрывают над головой, на самокате и
+// велосипеде уезжают; погодя возвращают — вещь снова на стойке (27.11: вещи больше не пропадают, залога нет).
 // Денег сцена не считает — их считает вечер (day.ts). В лёгкой графике прохожих с вещами меньше: двое за день и
 // по одному на улице (13.11, автор: «в лёгком режиме — меньше прохожих с вещами»).
 
@@ -10,7 +9,7 @@ import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { t } from '../i18n';
 import { UI_FONT } from '../ui/dom';
-import { DEPOSITS, KIT_ICON, KIT_ITEMS, RENTAL_CAP, rentalDay, kitToday, rentalOf, type RentalItem, type RentalKit } from '../game/rental';
+import { KIT_ICON, KIT_ITEMS, rentalCap, rentalDay, kitToday, rentalOf, type RentalItem, type RentalKit } from '../game/rental';
 import { guestsToday } from '../game/day';
 import { pitchNow } from '../game/tenants';
 import { inZar } from '../game/zarshop';
@@ -61,7 +60,7 @@ let stops: (() => void)[] = [];
 /** Вещи на стойке (картинки по местам) и сколько сейчас на руках. */
 let slots: Phaser.GameObjects.Image[] = [];
 let out = 0;
-/** Сегодняшние прохожие: сколько уже подходили и сколько из них не вернут. */
+/** Сегодняшние прохожие: сколько уже подходили. */
 let day = 0;
 let taken = 0;
 let walkers = 0;
@@ -75,16 +74,13 @@ function clear(): void {
   walkers = 0;
 }
 
-/** Видно столько вещей, сколько их на стойке (запас минус те, что на руках), долей от мест набора. */
-function refreshSlots(scene: StoreScene): void {
-  const stock = rentalOf(scene.state)?.stock ?? 0;
-  const left = Math.max(0, stock - out);
-  const n = slots.length;
-  const shown = left <= 0 ? 0 : Math.max(1, Math.round((n * left) / RENTAL_CAP));
+/** Стойка полная, кроме вещей на руках у тех, кто сейчас катается: каждая взятая освобождает своё место. */
+function refreshSlots(): void {
+  const shown = Math.max(0, slots.length - out);
   slots.forEach((img, i) => img.active && img.setVisible(i < shown));
 }
 
-/** Стойка: каждое утро (набор от погоды), после покупки и докупки и при перестройке мира (streets.buildStreet). */
+/** Стойка: каждое утро (набор от погоды), после покупки, когда магазин вырос, и при перестройке мира (streets.buildStreet). */
 export function applyRental(scene: StoreScene): void {
   clear();
   const state = scene.state;
@@ -123,15 +119,14 @@ export function applyRental(scene: StoreScene): void {
     day = state.day;
     taken = 0;
   }
-  refreshSlots(scene);
-  // Нажатие: что сегодня на стойке и сколько возьмут (прогноз утра — тот же расчёт, что вечером).
+  refreshSlots();
+  // Нажатие: что сегодня на стойке, сколько возьмут и сколько принесёт (прогноз утра — тот же расчёт, что вечером).
   stand.setInteractive({ useHandCursor: true }).on('pointerup', () =>
     camera.tap(scene, () => {
       sound.tap();
-      const now = rentalOf(scene.state);
       const plan = rentalDay(scene.state, guestsToday(scene.state));
-      if (!now || !plan) return;
-      scene.popup(x, y - 22, t('rental.tap', { icon: KIT_ICON[kit], n: plan.rented, stock: now.stock, max: RENTAL_CAP, sum: DEPOSITS[now.deposit].sum }), '#c8f0ff');
+      if (!plan) return;
+      scene.popup(x, y - 22, t('rental.tap', { icon: KIT_ICON[kit], n: plan.rented, max: rentalCap(scene.state), sum: plan.income }), '#c8f0ff');
     }),
   );
   const world = scene.worldGen;
@@ -145,12 +140,10 @@ export function applyRental(scene: StoreScene): void {
       const plan = rentalDay(scene.state, guestsToday(scene.state));
       const shown = Math.min(plan?.rented ?? 0, scene.lite ? LITE_SHOWN : SHOWN_MAX);
       if (!plan || taken >= shown) return;
-      // Последние из показанных — те, кто не вернёт (сколько не вернут за день, столько и здесь, не больше).
-      const keeps = taken >= shown - Math.min(plan.lost, shown);
       const item = KIT_ITEMS[kit][taken % KIT_ITEMS[kit].length];
       taken++;
       walkers++;
-      void renter(scene, item, x, y, keeps).finally(() => {
+      void renter(scene, item, x, y).finally(() => {
         if (scene.worldGen === world) walkers = Math.max(0, walkers - 1);
       });
     }),
@@ -188,15 +181,15 @@ function carry(scene: StoreScene, guest: Phaser.GameObjects.Container, item: Ren
 /** Взять со стойки (место пустеет) или вернуть (вещь снова на месте). */
 function handOver(scene: StoreScene, x: number, y: number, back: boolean): void {
   out = Math.max(0, out + (back ? -1 : 1));
-  refreshSlots(scene);
+  refreshSlots();
   if (back) scene.popup(x, y - 16, '👍', '#c8f0ff');
 }
 
 /**
  * Прохожий берёт вещь: идёт по тротуару, встаёт перед стойкой, уходит с вещью дальше (на колёсах — краем дороги).
- * Погодя возвращается с того же края и ставит её на место (keeps — не вернёт: тогда место пустеет до утра).
+ * Погодя возвращается с того же края и ставит её на место.
  */
-async function renter(scene: StoreScene, item: RentalItem, x: number, y: number, keeps: boolean): Promise<void> {
+async function renter(scene: StoreScene, item: RentalItem, x: number, y: number): Promise<void> {
   const world = scene.worldGen;
   const walkY = scene.streetY + Phaser.Math.Between(-2, 2);
   const front = y + 6;
@@ -219,7 +212,7 @@ async function renter(scene: StoreScene, item: RentalItem, x: number, y: number,
   carry(scene, guest, item, fromLeft);
   await persons.walkVia(scene, guest, ride ? [along(!fromLeft)] : [{ x: x - side * 22, y: walkY }, along(!fromLeft)], RIDE_SPEED[item]);
   if (guest.active) guest.destroy();
-  if (keeps || scene.worldGen !== world) return;
+  if (scene.worldGen !== world) return;
   await scene.wait(Phaser.Math.Between(...BACK_AFTER));
   // Возвращает тот же человек — с того края, куда уехал.
   const start = along(!fromLeft);

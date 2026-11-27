@@ -79,7 +79,7 @@ import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, 
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { buyZar, homeShop, inZar, switchToday, ZAR_MAX_LEVEL, ZAR_PRICE } from './zarechye';
 import { canStock, restockPlan } from './restock';
-import { addBed, bedsOf, buildGarden, GARDEN_PRICE, harvest, nextBedCost, plant, type CropId } from './garden';
+import { addBed, buildGarden, GARDEN_PRICE, nextBedCost } from './garden';
 import { freeRooms, giveTenant, invitePitch, rentRoom, TENANT_IDS, TENANTS, tenantAsks, tenantsOf, upgradeCost as tenantUpCost, upgradeTenant } from './tenants';
 import { pawnOffer, refusePawn, takePawn } from './pawnshop';
 import { buyLine } from './reorder';
@@ -126,7 +126,7 @@ import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, next
 import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
 import { carryBonus, eyeTheft } from './owner';
-import { buyStand, ITEM_COST, RENTAL_CAP, rentalOf, restockRental, STAND_COST } from './rental';
+import { buyStand, STAND_COST } from './rental';
 import { buyFloor, finishCost, finishFloor, floorAvailable, FLOORS, hasFloor } from './floors';
 import { basementOf, buyPart, buySlot, PARTS, SLOT_COST, slotPlaces } from './basement';
 import { batchCost, buyBatch, clothesOf, freePlaces, setClerk, setSale } from './clothes';
@@ -292,16 +292,16 @@ export type Feature =
   // Арендаторы флигеля (tenants.ts): сдаёт комнаты (самые выгодные — первыми), отделывает второй раз, зовёт сезонного
   // торговца и носит арендаторам, что просят.
   | 'tenants'
-  // Бабушкин двор (garden.ts): ставит теплицу, докапывает грядки, сажает «яблоки и картошку» и собирает урожай
-  // каждое утро — прямо на овощной прилавок.
+  // Бабушкин двор (garden.ts): ставит теплицу и докапывает грядки; деньги каждый вечер приходят сами (nightCycle),
+  // как в игре (27.11: раньше собирал урожай по часам на прилавок каждое утро - двор выходил в ~10 раз богаче живого).
   | 'garden'
   // Лицензия на пиво и сигареты (license.ts): покупает, когда есть запас и не копит на расширение. Подросткам
   // не продаёт (особых гостей симулятор не водит) — нарушений нет, проверки проходят чисто.
   | 'license'
   // Ломбард (pawnshop.ts): берёт вещь у гостя со спокойной приметой, если в кассе с запасом; суетливым отказывает.
   | 'pawn'
-  // Прокат у входа (rental.ts, 13.11): ставит стойку, когда не копит на помещение, и каждое утро докупает пропавшее;
-  // залог — средний (по умолчанию).
+  // Прокат у входа (rental.ts, 13.11): ставит стойку, когда не копит на помещение; дальше она работает сама (27.11:
+  // без залога и докупки, стойка растёт с магазином).
   | 'rental'
   // Лотерея у кассы (lottery.ts): ставит стойку, когда есть запас; тираж и запреты — в nightCycle, как в игре.
   | 'lottery'
@@ -338,9 +338,6 @@ const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy
 const SHELF_PRIORITY_DEPTS: Category[] = ['dairy', 'meat', 'drinks', 'produce', 'frozen', 'bakery', 'household', 'dairy', 'produce', 'meat', 'drinks', 'frozen', 'bakery', 'household', 'dairy', 'produce', 'meat'];
 
 const AVG_WANTS = 1.5;
-/** Двор в симуляторе: игрок заходит раз в день, утром; время двора — по игровым дням. */
-const DAY_MS = 86_400_000;
-const SIM_CROP: CropId = 'mix';
 /** Сколько штук каждого товара держит новичок (buyMode: 'naive'). */
 const NAIVE_STOCK = 8;
 
@@ -819,26 +816,19 @@ export function simulate({
 
     // ---------- Утро: двор и флигель ----------
     if (features.garden) {
-      const now = state.day * DAY_MS;
-      const built = buildGarden(state, now);
+      const built = buildGarden(state);
       if (built) {
         state = built;
         investments += GARDEN_PRICE;
       }
       const bedCost = nextBedCost(state);
       if (bedCost !== null && state.money >= bedCost * 2 + reserve && canSplurge(bedCost)) {
-        const dug = addBed(state, now);
+        const dug = addBed(state);
         if (dug) {
           state = dug;
           investments += bedCost;
         }
       }
-      // Новая грядка вскопана под картошку — пересаживает под «яблоки и картошку» (за один заход в день с неё больше всего,
-      // а два вида делят прилавок).
-      bedsOf(state).forEach((bed, i) => {
-        if (bed.crop !== SIM_CROP) state = plant(state, i, SIM_CROP, now) ?? state;
-      });
-      state = harvest(state, now)?.state ?? state;
     }
     if (features.tenants) {
       const best = [...TENANT_IDS].sort((a, b) => TENANTS[b].rent / TENANTS[b].setup - TENANTS[a].rent / TENANTS[a].setup);
@@ -927,8 +917,6 @@ export function simulate({
           investments += STAND_COST;
         }
       }
-      const missing = RENTAL_CAP - (rentalOf(state)?.stock ?? RENTAL_CAP);
-      if (missing && state.money >= missing * ITEM_COST + reserve) state = restockRental(state, missing) ?? state;
     }
 
     // ---------- Утро: закупка ----------

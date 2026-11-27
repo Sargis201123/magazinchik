@@ -1,25 +1,11 @@
-// Прокат у входа во вкладке «Уголки» (game/rental.ts, 13.11): купить стойку, докупить пропавшие вещи, выбрать залог.
-// Прогноз дня — тот же расчёт, что вечером (без потерь он точный): сменил залог — сразу видно, сколько возьмут.
-// Мир — scenes/rentalFx.ts (стойку ставит заново, когда меняется rental в сохранении).
+// Прокат у входа во вкладке «Уголки» (game/rental.ts, 13.11): купить стойку, что на ней сегодня и почём, сколько
+// возьмут, вчера и всего. 27.11: без залога и докупки - стойка растёт с магазином сама, цена за день видна в строке.
+// Прогноз дня - тот же расчёт, что вечером. Мир - scenes/rentalFx.ts (стойку ставит заново, когда меняется её вид).
 
 import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
 import { guestsToday } from '../game/day';
-import {
-  buyStand,
-  DEPOSIT_IDS,
-  DEPOSITS,
-  ITEM_COST,
-  KIT_ICON,
-  KIT_ITEMS,
-  RENTAL_CAP,
-  rentalDay,
-  kitToday,
-  rentalOf,
-  restockRental,
-  setDeposit,
-  STAND_COST,
-} from '../game/rental';
+import { buyStand, KIT_ICON, KIT_ITEMS, KIT_PRICE, kitToday, rentalCap, rentalDay, rentalLog, rentalOf, STAND_COST } from '../game/rental';
 import { track } from '../platform/analytics';
 import { button, el, toast } from './dom';
 import { setItemIcon } from './sheet';
@@ -27,45 +13,37 @@ import { setItemIcon } from './sheet';
 type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') => void;
 
 /** Строка с картинкой: как artRow утра (morning.ts), но своя — чтобы не тянуть утро в этот модуль. */
-function row(texture: string, name: string, actions: HTMLElement[], price?: number): HTMLElement {
+function row(texture: string, name: string, actions: HTMLElement[], tag?: string, sub?: string): HTMLElement {
   const item = el('div', 'ui-item');
   const img = el('img', 'ui-item-art');
   setItemIcon(img, texture);
   img.alt = '';
   const body = el('div');
   const title = el('div', 'ui-item-name', name);
-  if (price !== undefined) title.append(el('span', 'ui-tag', `${price} 💰`));
+  if (tag !== undefined) title.append(el('span', 'ui-tag', tag));
   body.append(title);
+  if (sub) body.append(el('div', 'ui-item-sub', sub));
   const right = el('div', 'ui-item-actions');
   right.append(...actions);
   item.append(img, body, right);
   return item;
 }
 
-/** Что на плитке «Уголков»: вещей на стойке или цена стойки. */
+/** Что на плитке «Уголков»: сколько стойка принесёт сегодня или цена стойки. */
 export const rentalStatus = (state: StoreState): string => {
-  const r = rentalOf(state);
-  return r ? `${KIT_ICON[kitToday(state)]} ${r.stock}/${RENTAL_CAP}` : `${STAND_COST} 💰`;
+  if (!rentalOf(state)) return `${STAND_COST} 💰`;
+  const plan = rentalDay(state, guestsToday(state));
+  return plan ? t('rental.tile', { sum: plan.income }) : '—';
 };
-/** Плитка горит, когда половины вещей уже нет. */
-export const rentalAlert = (state: StoreState): boolean => (rentalOf(state)?.stock ?? RENTAL_CAP) <= RENTAL_CAP / 2;
-
-/** Докупить всё пропавшее (сколько хватит денег): для карточки и «Главного на сегодня». */
-export function restockButton(state: StoreState, getState: () => StoreState, update: Update): HTMLElement | null {
-  const r = rentalOf(state);
-  const missing = r ? RENTAL_CAP - r.stock : 0;
-  if (!missing) return null;
-  return button(t('rack.refill', { n: missing, cost: missing * ITEM_COST }), () => update(restockRental(getState(), missing), 'success'), 'ui-chip', state.money < ITEM_COST);
-}
 
 export function rentalBox(state: StoreState, getState: () => StoreState, update: Update): HTMLElement {
   const box = el('div', 'ui-box');
   const kit = kitToday(state);
   box.append(el('b', '', `${KIT_ICON[kit]} ${t('rental.title')}`), el('div', 'ui-muted', t('rental.note')));
   const r = rentalOf(state);
-  if (!r) {
+  if (!r)
     box.append(
-      row('rent_stand', t('rental.stand', { n: RENTAL_CAP }), [
+      row('rent_stand', t('rental.stand', { n: rentalCap(state) }), [
         button(
           t('upgrade.buy'),
           () => {
@@ -78,26 +56,16 @@ export function rentalBox(state: StoreState, getState: () => StoreState, update:
           'ui-chip',
           state.money < STAND_COST,
         ),
-      ], STAND_COST),
+      ], `${STAND_COST} 💰`),
     );
-    return box;
-  }
-  // Прогноз дня: что на стойке, сколько возьмут и сколько принесёт (без пропаж — их не угадать).
+  // Что сегодня на стойке и почём за день; сколько вещей - растёт с магазином.
+  const what = t(`rental.kit.${kit}` as TextKey);
+  box.append(row(`rent_${KIT_ITEMS[kit][0]}`, what.charAt(0).toUpperCase() + what.slice(1), [], t('rental.perDay', { n: KIT_PRICE[kit] }), r ? t('rental.stock', { n: rentalCap(state) }) : undefined));
+  if (!r) return box;
+  // Прогноз дня: сколько возьмут и сколько принесёт (вечером придёт ровно столько).
   const plan = rentalDay(state, guestsToday(state));
-  if (plan) box.append(el('div', 'ui-note', t('rental.today', { icon: KIT_ICON[kit], what: t(`rental.kit.${kit}` as TextKey), n: plan.rented, sum: plan.income })));
-  const restock = restockButton(state, getState, update);
-  box.append(row(`rent_${KIT_ITEMS[kit][0]}`, t('rental.stock', { n: r.stock, max: RENTAL_CAP }), restock ? [restock] : [el('span', 'ui-tag', t('rack.full'))]));
-  if (r.stock < RENTAL_CAP) box.append(el('div', 'ui-item-sub', t('rental.itemCost', { cost: ITEM_COST })));
-  // Залог: три кнопки и что он значит.
-  const chips = el('div', 'ui-chips');
-  for (const id of DEPOSIT_IDS) {
-    chips.append(button(`${t(`rental.dep.${id}` as TextKey)} · ${DEPOSITS[id].sum} 💰`, () => update(setDeposit(getState(), id)), `ui-chip${r.deposit === id ? ' active' : ''}`));
-  }
-  box.append(el('h3', '', t('rental.deposit')), chips, el('div', 'ui-muted', t(`rental.dep.${r.deposit}.note` as TextKey)));
-  const last = r.last;
-  if (last && last.day === state.day - 1) {
-    const lost = last.lost ? ` · ${t('rental.summaryLost', { n: last.lost, kept: last.kept })}` : '';
-    box.append(el('div', 'ui-item-sub', `${t('rental.yesterday', { icon: KIT_ICON[last.kit], n: last.rented, sum: last.income })}${lost}`));
-  }
+  if (plan) box.append(el('div', 'ui-note', t('rental.today', { icon: KIT_ICON[kit], n: plan.rented, max: rentalCap(state), sum: plan.income })));
+  const log = rentalLog(state);
+  if (log) box.append(el('div', 'ui-muted', t('rental.yesterday', log)));
   return box;
 }

@@ -360,12 +360,12 @@ export function finishDay(scene: StoreScene): void {
   // Лотерея (game/lottery.ts, 15.11): сколько билетов взяли, доля магазина, сколько выиграло, крупный тираж.
   const lot = lotteryDay(before, night.state, finishedDay);
   if (lot) extra.push([t('lottery.summary'), [t('lottery.summaryValue', { n: lot.n, sum: lot.sum, w: lot.w }), ...(lot.big ? [t('lottery.summaryBig', { n: WIN_BONUS })] : [])].join(' · ')]);
-  // Прокат у входа (rental.ts): сколько раз взяли и сколько денег; кто не вернул — залог остался у нас.
+  // Прокат у входа (rental.ts): сколько раз взяли и сколько денег.
   const rental = night.rental;
-  if (rental?.rented) {
-    const lost = rental.lost ? ` · ${t('rental.summaryLost', { n: rental.lost, kept: rental.kept })}` : '';
-    extra.push([t('rental.summary'), `${t('rental.summaryValue', { icon: KIT_ICON[rental.kit], n: rental.rented, sum: rental.income })}${lost}`]);
-  }
+  if (rental?.rented) extra.push([t('rental.summary'), t('rental.summaryValue', { icon: KIT_ICON[rental.kit], n: rental.rented, sum: rental.income })]);
+  // Пассивные доходы в аналитику (27.11): сколько за вечер дали двор и прокат - видно в D1 по дням.
+  if (night.yard) track('yard_day', finishedDay, night.yard);
+  if (rental) track('rental_day', finishedDay, rental.income);
   // Автоматы в подвале (game/basement.ts): сколько дали за вечер (после доли «крыши») или облава.
   const slots = night.slots;
   if (slots) extra.push([t('bsm.summary'), slots.raid ? t('bsm.raid', { n: slots.raid.n, fine: slots.raid.fine }) : t('bsm.summaryValue', { n: slots.players, sum: slots.income - slots.share })]);
@@ -550,6 +550,7 @@ export function finishDay(scene: StoreScene): void {
 /** Подписи «Прочих доходов» в итогах дня (game/day.ts otherIncome) — те же, что у строк под «Подробнее». */
 const INCOME_KEYS: Record<IncomeId, TextKey> = {
   rent: 'tenant.summary',
+  yard: 'garden.summary',
   estate: 'estate.summary',
   branch: 'branch.summary',
   home: 'zar.summary.home',

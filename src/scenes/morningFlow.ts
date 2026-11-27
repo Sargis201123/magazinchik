@@ -82,6 +82,7 @@ import * as decorations from './decorations';
 import * as weeksFx from './weeks';
 import * as linesFx from './brandLines';
 import * as rentalFx from './rentalFx';
+import * as gardenFx from './gardenFx';
 import * as basementFx from './basementFx';
 import * as clothesFx from './clothesFx';
 import * as foodcourtFx from './foodcourtFx';
@@ -213,8 +214,11 @@ export function showMorning(scene: StoreScene): void {
   scene.state = endSale(scene.state);
   weeksFx.applyWeek(scene);
   linesFx.applyLines(scene);
-  // Стойка проката: набор дня — по погоде, вещей — сколько осталось после вчерашнего (game/rental.ts).
+  // Стойка проката: набор дня - по погоде, стойка всегда полная (game/rental.ts).
   rentalFx.applyRental(scene);
+  // Двор: утром грядки снова ростки (к вечеру поспеют) - перерисовать сразу, облёт начинается над двором.
+  scene.yardMorning = true;
+  gardenFx.tickGarden(scene);
   dreamsFx.applyDreams(scene);
   scene.awaitingBoxes = 0;
   scene.hud.update(scene.state, DAY_SECONDS);
@@ -387,6 +391,8 @@ export function startDay(scene: StoreScene): void {
     reportError(error, 'rivalDay');
   }
   scene.timeLeft = DAY_SECONDS;
+  // Утро кончилось: дальше грядки растут по часам смены (gardenFx.ts) - с этой же минуты, без скачка.
+  scene.yardMorning = false;
   scene.nextSpawn = 1;
   scene.running = true;
   // Друзья откликнулись на «Помоги!» — весь день касса пробивает быстрее (help.ts).

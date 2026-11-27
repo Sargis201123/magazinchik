@@ -2,17 +2,18 @@
 // 10.11 (третий обход, просьба автора): раньше теплица стояла на газоне перед входом, а в тесных помещениях — в парке
 // за дорогой, и её не находили. Теперь у неё своё место рядом с магазином: калитка, дорожка к улице вдоль флигеля,
 // теплица с первой грядкой, рядом ещё две грядки под открытым небом, бочка с лейкой, пугало и подсолнухи у забора.
-// Рассада растёт по настоящему времени; созрело — над грядкой покачивается значок, нажатие на двор собирает урожай.
+// 27.11: двор приносит деньги сам каждый вечер (как аренда), собирать нечего: грядки растут за игровой день - утром
+// ростки, к вечеру спело, - нажатие на двор показывает, сколько он приносит. Значка «созрело» больше нет.
 // Камеру ко двору ведёт кнопка «🌱» слева внизу (ui/hud.ts), утренний облёт начинается над двором.
 
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { t } from '../i18n';
-import { PRODUCTS } from '../game/economy';
-import { BEDS_MAX, bedLeft, bedRipe, bedsOf, bedStage, gardenLook, gardenRipe, gardenVisible, harvest, hasGarden, type Bed } from '../game/garden';
+import { DAY_SECONDS } from '../game/economy';
+import { BED_CROPS, BEDS_MAX, bedCount, gardenLook, gardenVisible, hasGarden, yardIncome, yardStage } from '../game/garden';
 import { yearTime } from '../game/calendar';
 import { inZar } from '../game/zarshop';
-import { saveGame, savingPaused } from '../game/save';
+import { savingPaused } from '../game/save';
 import { sound } from '../platform/sound';
 import { UI_FONT } from '../ui/dom';
 import { ART, randomLook } from './common';
@@ -50,7 +51,16 @@ function clearYard(scene: StoreScene): void {
 }
 
 /**
- * Поставить (или перерисовать) двор: зовётся при постройке улицы и когда грядка перешла на новую стадию.
+ * Доля прошедшего дня для грядок (и в лёгкой графике): утреннее окно - утро, день - по часам смены, ночная смена,
+ * закрытие и итоги - вечер. Утро - по отметке yardMorning (morningFlow.ts): timeLeft до «Открыть магазин»
+ * остаётся от вчерашнего дня (0), и без неё утром грядки стояли бы спелыми.
+ */
+const dayShare = (scene: StoreScene): number => (scene.night ? 1 : scene.yardMorning ? 0 : Phaser.Math.Clamp(1 - scene.timeLeft / DAY_SECONDS, 0, 1));
+/** Что сейчас нарисовано: грядки и стадия по ходу дня, виден ли двор. */
+const yardKey = (scene: StoreScene): string => `${gardenLook(scene.state, dayShare(scene))}|${gardenVisible(scene.state) ? 1 : 0}`;
+
+/**
+ * Поставить (или перерисовать) двор: зовётся при постройке улицы и когда грядки перешли на новую стадию.
  * 11.11 (просьба автора): двор нарисован пиксельными картинками (art/yard.py) — земля с сараем, пугалом,
  * подсолнухами, тачкой, бочкой и цветником; грядки-короба своей культуры на каждой стадии; стеклянная теплица;
  * передний забор с калиткой. По двору ходит огородник: поливает, рыхлит, ходит к бочке за водой.
@@ -58,8 +68,7 @@ function clearYard(scene: StoreScene): void {
 export function buildGarden(scene: StoreScene, next: Layout, top: number): void {
   clearYard(scene);
   scene.gardenAt = { next, top };
-  const now = Date.now();
-  scene.builtGarden = `${gardenLook(scene.state, now)}|${gardenVisible(scene.state) ? 1 : 0}`;
+  scene.builtGarden = yardKey(scene);
   if (inZar(scene.state) || !gardenVisible(scene.state)) {
     scene.gardener?.destroy();
     scene.gardener = undefined;
@@ -67,7 +76,8 @@ export function buildGarden(scene: StoreScene, next: Layout, top: number): void 
   }
   const yard = yardRect(next);
   const { x, y, w, h } = yard;
-  const beds = bedsOf(scene.state);
+  const beds = bedCount(scene.state);
+  const stage = yardStage(dayShare(scene));
   const snow = scene.weather === 'snow' || yearTime(scene.state.day) === 'winter';
   const keep = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
     scene.gardenObjs.push(obj);
@@ -96,39 +106,23 @@ export function buildGarden(scene: StoreScene, next: Layout, top: number): void 
     return;
   }
 
-  // Грядки: первая — в теплице, остальные под открытым небом; невскопанные — колышками с бечёвкой.
-  let ripeAt: { x: number; y: number } | undefined;
+  // Грядки: первая - в теплице (яблоки с картошкой), вторая - яблони, третья - картошка; невскопанные - колышками
+  // с бечёвкой. Все растут вместе по ходу дня: утром ростки, днём кусты, к вечеру спело.
   for (let i = 0; i < BEDS_MAX; i++) {
     const spot = bedSpot(yard, i);
-    const bed: Bed | undefined = beds[i];
-    if (!bed) {
+    if (i >= beds) {
       keep(scene.art(spot.x, spot.y, 'yard_bed_plot').setOrigin(0.5, 1).setDepth(spot.y));
       continue;
     }
-    const stage = bedStage(bed, now);
     const cold = snow && i > 0 ? '_snow' : '';
-    keep(scene.art(spot.x, spot.y, `yard_bed_${bed.crop}_${stage}${cold}`).setOrigin(0.5, 1).setDepth(spot.y));
-    const roof = i === 0 ? spot.y - 30 : spot.y - (bed.crop === 'quick' ? 14 : 22);
+    keep(scene.art(spot.x, spot.y, `yard_bed_${BED_CROPS[i]}_${stage}${cold}`).setOrigin(0.5, 1).setDepth(spot.y));
     if (i === 0) keep(scene.art(spot.x, spot.y + 1, 'yard_greenhouse').setOrigin(0.5, 1).setDepth(spot.y + 0.5));
-    if (stage === 3) {
-      ripeAt ??= { x: spot.x, y: roof };
-      // Созрело: значок над грядкой покачивается — нажми и собери.
-      const mark = keep(
-        scene.add
-          .container(spot.x, roof - 6, [
-            scene.add.circle(0, 0, 4.2, 0xfee761).setStrokeStyle(0.8, 0x2b2233),
-            scene.add.text(0, 0, '!', { fontFamily: UI_FONT, fontSize: '6px', fontStyle: 'bold', color: '#2b2233' }).setOrigin(0.5).setResolution(scene.textRes(4)),
-          ])
-          .setDepth(y + h + 2),
-      );
-      if (!scene.lite) scene.tweens.add({ targets: mark, y: roof - 9, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: i * 180 });
-    }
   }
   // Табличка у калитки, над дорожкой.
   sign(scene, x + w - 15, y + h - 23, t('garden.yard')).forEach((o, k) => keep((o as Phaser.GameObjects.Graphics).setDepth(y + h - 16 + k * 0.1)));
   life(scene, yard, snow).forEach(keep);
 
-  const tapAt = ripeAt ?? { x: bedSpot(yard, 0).x, y: y + 12 };
+  const tapAt = { x: bedSpot(yard, 0).x, y: y + 12 };
   keep(
     scene.add
       .zone(x + w / 2, y + h / 2 - 4, w, h + 8)
@@ -160,21 +154,16 @@ async function gardener(scene: StoreScene, yard: { x: number; y: number; w: numb
     ]);
   };
   while (alive()) {
-    const beds = bedsOf(scene.state);
+    const beds = bedCount(scene.state);
     const roll = Math.random();
-    if (beds.length && roll < 0.7) {
-      const i = Phaser.Math.Between(0, beds.length - 1);
+    if (beds && roll < 0.7) {
+      const i = Phaser.Math.Between(0, beds - 1);
       const spot = bedSpot(yard, i);
       // Перед грядкой; к теплице — у её двери справа.
       await go(spot.x + (i === 0 ? 18 : Phaser.Math.Between(-9, 9)), spot.y + 6);
       if (!alive()) return;
       persons.setFacing(man, i === 0 ? 'left' : 'up');
-      const now = Date.now();
-      if (bedRipe(beds[i], now)) {
-        // Спелое не трогает — оглядывается, будто зовёт собрать.
-        persons.setFacing(man, 'down');
-        await scene.wait(1800);
-      } else if (Math.random() < 0.6) await water(scene, man);
+      if (Math.random() < 0.6) await water(scene, man);
       else await weed(scene, man);
     } else if (roll < 0.85) {
       await go(yard.x + BARREL.x + 8, yard.y + BARREL.y);
@@ -252,38 +241,15 @@ function life(scene: StoreScene, yard: { x: number; y: number; w: number; h: num
   return out;
 }
 
-const leftText = (ms: number): string => {
-  const minutes = Math.ceil(ms / 60_000);
-  return t('garden.left', { h: Math.floor(minutes / 60), m: minutes % 60 });
-};
-
-/** Нажали на двор: созрело — урожай на прилавок, нет — сколько ещё расти. */
+/** Нажали на двор: сколько он приносит каждый вечер (в гостях у друга - просто 🌱). */
 function tapGarden(scene: StoreScene, x: number, y: number): void {
-  // В гостях (свой магазин не сохраняется) двор только смотрят.
-  if (savingPaused()) {
-    scene.popup(x, y - 4, '🌱', '#d8f0d8');
-    return;
-  }
-  const now = Date.now();
-  const done = harvest(scene.state, now);
-  if (!done) {
-    const beds = bedsOf(scene.state);
-    scene.popup(x, y - 4, gardenRipe(scene.state, now) ? t('garden.noRoom') : leftText(Math.min(...beds.map((bed) => bedLeft(bed, now)))), '#d8f0d8');
-    return;
-  }
-  scene.state = done.state;
-  saveGame(scene.state);
   sound.tap();
-  scene.popup(x, y - 4, t('garden.got', { list: done.got.map(({ id, qty }) => `${PRODUCTS[id].icon}×${qty}`).join(' ') }), '#d8f0d8');
-  scene.refreshShelves();
-  if (scene.gardenAt) buildGarden(scene, scene.gardenAt.next, scene.gardenAt.top);
+  scene.popup(x, y - 4, savingPaused() ? '🌱' : t('garden.tap', { n: yardIncome(scene.state) }), '#d8f0d8');
 }
 
-/** Раз в несколько секунд: урожай подрос, собран из меню или вскопали новую грядку — перерисовать двор. */
+/** Раз в несколько секунд: грядки подросли к вечеру, настало утро или вскопали новую грядку - перерисовать двор. */
 export function tickGarden(scene: StoreScene): void {
-  if (!scene.gardenAt) return;
-  const look = `${gardenLook(scene.state, Date.now())}|${gardenVisible(scene.state) ? 1 : 0}`;
-  if (look !== scene.builtGarden) buildGarden(scene, scene.gardenAt.next, scene.gardenAt.top);
+  if (scene.gardenAt && yardKey(scene) !== scene.builtGarden) buildGarden(scene, scene.gardenAt.next, scene.gardenAt.top);
 }
 
 /** Кнопка «🌱»: показать двор — камера плавно отходит к нему и через несколько секунд возвращается домой. */
