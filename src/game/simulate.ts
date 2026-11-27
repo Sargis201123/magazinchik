@@ -78,7 +78,7 @@ import {
 import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd, type AdId } from './ads';
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { buyZar, homeShop, inZar, switchToday, ZAR_MAX_LEVEL, ZAR_PRICE } from './zarechye';
-import { canStock, restockPlan } from './restock';
+import { restockPlan } from './restock';
 import { addBed, buildGarden, GARDEN_PRICE, nextBedCost } from './garden';
 import { freeRooms, giveTenant, invitePitch, rentRoom, TENANT_IDS, TENANTS, tenantAsks, tenantsOf, upgradeCost as tenantUpCost, upgradeTenant } from './tenants';
 import { pawnOffer, refusePawn, takePawn } from './pawnshop';
@@ -129,11 +129,11 @@ import { carryBonus, eyeTheft } from './owner';
 import { buyStand, STAND_COST } from './rental';
 import { buyFloor, finishCost, finishFloor, floorAvailable, FLOORS, hasFloor } from './floors';
 import { basementOf, buyPart, buySlot, PARTS, SLOT_COST, slotPlaces } from './basement';
-import { batchCost, buyBatch, clothesOf, freePlaces, setClerk, setSale } from './clothes';
+import { clothesMorning, clothesOf, freePlaces, setClerk } from './clothes';
 import { answerInspection, answerParty, inspectionToday, openStall, ownAllowed, partyToday, setStallMode, stallLock, stallMode, stallPlaces, stallsOf, STALL_IDS, STALLS } from './foodcourt';
 import { autoCapacity, CREDIT_MAX, QUICK_PATIENCE, quickPick, serveCapacity, smallBasket } from './traffic';
 import { levelPace, loaderPace, shelfToFill, tripSeconds } from './loader';
-import { buyVan, loadVan, planTrip, vanEvents, vanFuel, vanOpen, vanPrice, vanWant, VAN_EVENTS, VAN_PRICE } from './van';
+import { buyVan, vanOpen, VAN_PRICE } from './van';
 
 export { rng };
 
@@ -882,9 +882,9 @@ export function simulate({
       };
       if (floorAvailable(state, 'second')) spend(FLOORS.second.cost, buyFloor(state, 'second'));
       if (clothesOf(state)) {
-        state = setSale(state, true) ?? state;
         if (state.level >= 4) state = setClerk(state, true) ?? state;
-        for (let k = 0; k < 6 && freePlaces(state) > 0 && state.money >= batchCost(state) + reserve; k++) state = buyBatch(state) ?? state;
+        // 27.11: стойки пополняются сами каждое утро (как в игре — тот же завоз и тот же запас под счета); распродажа — сама.
+        state = clothesMorning(state);
         const fin = finishCost(state, 'second');
         if (fin !== null && !freePlaces(state)) spend(fin, finishFloor(state, 'second'));
       }
@@ -1058,30 +1058,11 @@ export function simulate({
         purchases += qty * best!.price;
       }
     }
-    // Выездная торговля (van.ts): фургон — когда на него есть лишние деньги; в день события — самое выгодное
-    // из событий дня, под него докупает сколько там обычно разбирают (у самого дешёвого поставщика) и грузит.
-    if (features.van) {
-      if (!state.van && vanOpen(state) && state.money >= VAN_PRICE * 2 + reserve && canSplurge(VAN_PRICE)) {
-        state = buyVan(state) ?? state;
-        investments += VAN_PRICE;
-      }
-      const best = vanEvents(state)
-        .map((id) => ({ id, gain: (Object.keys(VAN_EVENTS[id].wants) as ProductId[]).reduce((sum, p) => sum + (canStock(state, p) ? vanWant(state, id, p) * vanPrice(p, id) : 0), 0) - vanFuel(state, id) }))
-        .sort((a, b) => b.gain - a.gain)[0];
-      const planned = state.van && best ? planTrip(state, best.id) : null;
-      if (planned && best) {
-        state = planned;
-        for (const p of (Object.keys(VAN_EVENTS[best.id].wants) as ProductId[]).filter((x) => canStock(state, x))) {
-          const offers = SUPPLIER_IDS.map((sid) => priceOf(sid, p)).filter((x): x is number => x !== null);
-          const price = Math.min(...offers);
-          const qty = Math.min(vanWant(state, best.id, p), Math.floor((state.money - reserve) / price), warehouseCapacity(state) - warehouseCount(state));
-          if (!offers.length || qty <= 0) continue;
-          const bought = buyStock(state, p, qty, price);
-          if (!bought) continue;
-          purchases += state.money - bought.money;
-          state = loadVan(bought, p, qty) ?? bought;
-        }
-      }
+    // Выездная торговля (van.ts): фургон — когда на него есть лишние деньги. 27.11: дальше он ездит сам — в день
+    // события на самое выгодное, груз берёт у поставщика сам, мимо полок и склада; итог зачисляет ночь (settleVan).
+    if (features.van && !state.van && vanOpen(state) && state.money >= VAN_PRICE * 2 + reserve && canSplurge(VAN_PRICE)) {
+      state = buyVan(state) ?? state;
+      investments += VAN_PRICE;
     }
     // Кафе по соседству забирает заказ, как только магазин открылся.
     const cafeRes = cafeDeliver(state);

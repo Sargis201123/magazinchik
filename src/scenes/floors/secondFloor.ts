@@ -25,7 +25,7 @@
 import Phaser from 'phaser';
 import { t } from '../../i18n';
 import { sound } from '../../platform/sound';
-import { clothesOf, clothesPlan, collectionFor, COLLECTION_DEFS, COLLECTIONS, oldStock, rackPlaces, salePrice, soldBy, stockTotal, tagPrice, type Collection } from '../../game/clothes';
+import { clothesOf, clothesPlan, collectionFor, COLLECTION_DEFS, COLLECTIONS, freePlaces, oldStock, rackPlaces, salePrice, soldBy, stockTotal, tagPrice, type Collection } from '../../game/clothes';
 import { hasFloorUp } from '../../game/floors';
 import { guestsToday } from '../../game/day';
 import { weatherToday } from '../../game/crisis';
@@ -142,7 +142,7 @@ export function buildSecond(kit: FloorKit): void {
   const full = Math.ceil(fresh / PER_RACK);
   // 14.11, ревью: остатки прошлых сезонов тоже висят на стойках (они и занимают места — clothes.ts freePlaces), а
   // раньше их стойки рисовались пустыми: при полных местах половина зала стояла голой и «уценка» была не видна.
-  // Теперь сначала стойки сезона, за ними — старые вещи (посеревшие: пылятся до распродажи), пустые — только свободные места.
+  // Теперь сначала стойки сезона, за ними — старые вещи (с биркой распродажи, 27.11 она идёт сама), пустые — только свободные места.
   const rackKeys: string[] = Array.from({ length: Math.min(racks.length, full) }, () => `fl2b_rack_${coll}`);
   for (const id of COLLECTIONS) {
     if (id === coll) continue;
@@ -152,10 +152,8 @@ export function buildSecond(kit: FloorKit): void {
     // 15.11: соседние стойки одной коллекции — с разным набором вещей (второй рисунок, art/floors_life.py).
     const key = rackKeys[i] && i % 2 ? rackKeys[i].replace('fl2b_rack_', 'fl2c_rack_') : rackKeys[i];
     const img = prop(kit, p.x, p.y, key ?? 'fl2b_rack');
-    if (i >= full && rackKeys[i]) {
-      if (c?.sale) kit.art(p.x + 8, p.y - 22, 'fl2_sale').setScale(0.35).setDepth(p.y + 0.5);
-      else img.setTint(0xc0cbdc);
-    }
+    // Стойки прошлого сезона — с биркой распродажи (27.11: она идёт сама, clothes.ts).
+    if (i >= full && rackKeys[i]) kit.art(p.x + 8, p.y - 22, 'fl2_sale').setScale(0.35).setDepth(p.y + 0.5);
     img.setInteractive({ useHandCursor: true }).on('pointerup', () => {
       sound.tap();
       popup(p.x, p.y - 28, `${COLLECTION_DEFS[coll].icon} ${t('cl.stock', { n: stockTotal(c), max: places })}`, '#ffffff');
@@ -176,13 +174,11 @@ export function buildSecond(kit: FloorKit): void {
   // Без витрины марок на её месте — портновский бюст в вещи сезона: середина зала справа не пустует.
   if (!ups.brands) prop(kit, L.BRAND.x, L.BRAND.y, season('fl2b_form'));
   prop(kit, L.TABLE.x, L.TABLE.y, season('fl2b_table'));
-  // Прошлый сезон: стол уценки. На распродаже — бирка, без неё вещи пылятся (паутинка).
+  // Прошлый сезон: стол уценки с биркой распродажи (27.11: распродажа идёт сама, пока есть остатки).
   if (oldStock(state)) {
     prop(kit, L.BIN.x, L.BIN.y, 'fl2b_bin');
-    if (c?.sale) {
-      const tag = kit.art(L.BIN.x, L.BIN.y - 19, 'fl2_sale').setDepth(L.BIN.y + 1);
-      if (!lite) view.tweens.add({ targets: tag, angle: { from: -6, to: 6 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    } else kit.art(L.BIN.x - 8, L.BIN.y - 12, 'fl2_web').setDepth(L.BIN.y + 1).setAlpha(0.8);
+    const tag = kit.art(L.BIN.x, L.BIN.y - 19, 'fl2_sale').setDepth(L.BIN.y + 1);
+    if (!lite) view.tweens.add({ targets: tag, angle: { from: -6, to: 6 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
   // Касса: кассир за стойкой (стойка закрывает ему ноги).
   const cashier = kit.person(L.CASHIER.x, L.CASHIER.y - L.FOOT, { ...customerLook(0xb55088, 0), acc: 'badge' }).setDepth(L.CASHIER.y);
@@ -191,7 +187,7 @@ export function buildSecond(kit: FloorKit): void {
     .on('pointerup', () => {
       sound.tap();
       const plan = clothesPlan(store.state, guestsToday(store.state));
-      popup(L.TILL.x, L.TILL.y - 30, plan && fresh ? t('cl.tap', { n: plan.sold + plan.sale, sum: plan.income - plan.wage }) : t('cl.floorEmpty'));
+      popup(L.TILL.x, L.TILL.y - 30, plan && stockTotal(c) ? t('cl.tap', { n: plan.sold + plan.sale, sum: plan.income - plan.wage }) : t('cl.floorEmpty'));
     });
   // Лестница из магазина — у нижнего края слева: проём уходит за край зала, в шахту (22.11; была посреди пола).
   // На площадке — полукруглый коврик. Монстера у кассы, фикус у входа.
@@ -265,7 +261,8 @@ export function buildSecond(kit: FloorKit): void {
   // 14.11, аудит: на высоте 132 строка лежала прямо на верхушках нижнего ряда стоек, полупрозрачная. Теперь —
   // табличка с плотным фоном и рамкой в проходе под стойками (между ними и ковром со столом), где мебели нет.
   // 15.11: над подвесными лампами и их светом (глубина 350–352) — лампа не ложится на строку.
-  if (!fresh) {
+  // 27.11: стойки пополняются сами — пусто бывает, только когда утром не хватило денег (место есть, новых вещей нет).
+  if (!fresh && freePlaces(state) > 0) {
     const note = kit.text(W / 2, L.RACKS[2].y + 11, t('cl.floorEmpty'), 5.5, '#733e39').setWordWrapWidth(W - 24).setAlign('center').setDepth(360).setBackgroundColor('#f4e4c1').setPadding(3, 1, 3, 1);
     view.add.rectangle(note.x, note.y, note.displayWidth + 1, note.displayHeight + 1).setStrokeStyle(0.6, 0xb86f50).setDepth(360.1);
   }

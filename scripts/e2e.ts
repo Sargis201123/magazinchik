@@ -39,7 +39,7 @@ import { weatherFor } from '../src/game/weather';
 import { ru, type TextKey } from '../src/i18n/ru';
 import { buyFloor, buyFloorUp, finishFloor, FLOOR_UPGRADES, FLOOR_IDS } from '../src/game/floors';
 import { buyPart, buySlot, PART_IDS } from '../src/game/basement';
-import { buyBatch } from '../src/game/clothes';
+import { clothesMorning } from '../src/game/clothes';
 import { openStall, STALL_IDS } from '../src/game/foodcourt';
 import { isLang, type Lang } from '../src/i18n/langs';
 import { decodePng, encodePng } from './png';
@@ -111,7 +111,7 @@ function floorsState(base: any, full: boolean): any {
     }
     for (const p of PART_IDS) st = buyPart(st, p) ?? st;
     for (let i = 0; i < 6; i++) st = buySlot(st) ?? st;
-    for (let i = 0; i < 4; i++) st = buyBatch(st) ?? st;
+    st = clothesMorning(st);
     for (const id of STALL_IDS) st = openStall(st, id, 'rent') ?? st;
   }
   return { ...st, money: 50000 };

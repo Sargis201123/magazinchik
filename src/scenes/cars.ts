@@ -26,7 +26,7 @@ import {
   CAR_TYPES,
 } from './common';
 import { t } from '../i18n';
-import { tripToday, vanGoes, vanLoaded, vanOutcome, VAN_EVENTS } from '../game/van';
+import { vanOutcome, vanTripOn, VAN_EVENTS } from '../game/van';
 import { inZar } from '../game/zarshop';
 import * as lighting from './lighting';
 import * as gentrifyFx from './gentrifyFx';
@@ -789,17 +789,17 @@ export function parkVan(scene: StoreScene): void {
   spot.car = lotCar(scene, SHOP_VAN, spot.x, spot.y, spot.up ? -90 : 90, 'shop');
 }
 
-/** Магазин открылся, кузов загружен — фургон уезжает на выезд (в лёгкой графике просто исчезает с места). */
+/** Магазин открылся, сегодня есть выезд — фургон сам уезжает (game/van.ts vanTripOn; в лёгкой графике просто исчезает с места). */
 export async function vanDepart(scene: StoreScene): Promise<void> {
   const lot = scene.parking;
   const spot = vanSpot(scene);
-  const trip = tripToday(scene.state);
-  if (!lot || !spot || !trip || !vanGoes(scene.state)) return;
+  const event = vanTripOn(scene.state);
+  if (!lot || !spot || !event) return;
   scene.vanOut = scene.state.day;
   const car = spot.car;
   if (!car) return;
-  // 15.11, автор: «непонятно, когда он едет» — над фургоном куда и сколько штук везёт.
-  scene.popup(spot.x, spot.y - 14, t('van.popupGo', { icon: VAN_EVENTS[trip.event].icon, n: vanLoaded(scene.state) }), '#fff3b0');
+  // 15.11, автор: «непонятно, когда он едет» — над фургоном куда он поехал.
+  scene.popup(spot.x, spot.y - 14, t('van.popupOff', { icon: VAN_EVENTS[event].icon }), '#fff3b0');
   if (scene.lite) {
     car.box.destroy();
     spot.car = null;
@@ -834,9 +834,8 @@ async function vanReturn(scene: StoreScene): Promise<void> {
   const net = out?.net ?? 0;
   const show = (): void => {
     if (!spot.car?.box.active) return;
+    // Подробно (продал, товар, бензин, случай в дороге) — в итогах дня и в плитке фургона.
     scene.popup(spot.x, spot.y - 14, t('van.popupBack', { n: net >= 0 ? `+${net}` : `−${-net}` }), net > 0 ? '#c8ffb0' : '#ffd0d0');
-    // Следом — сколько продал, привёз и сколько испортилось (подробно — в итогах дня и в карточке утром).
-    if (out) scene.time.delayedCall(1100, () => scene.popup(spot.x, spot.y - 14, t('van.popupSold', { sold: out.sold, back: out.back, spoiled: out.spoiled }), '#fff3b0'));
   };
   // Так и не выехал (проезд весь день был занят) или лёгкая графика — итог сразу над местом.
   if ((spot.car && !spot.car.leaving) || scene.lite) {

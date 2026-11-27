@@ -271,9 +271,9 @@ import { rentalBox, rentalStatus } from './rental';
 import { KIT_ICON, kitToday, rentalOpen } from '../game/rental';
 import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
 import { lotteryNews } from '../game/lottery';
-import { vanBox, vanIdle, vanLines, vanNewsBox, vanStatus, vanToday } from './van';
-import { vanEventName } from './vanText';
-import { vanNews, vanOpen, VAN_EVENTS } from '../game/van';
+import { vanBox, vanLines, vanStatus } from './van';
+import { vanOpen } from '../game/van';
+import { clothesMorning, clothesToday } from '../game/clothes';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, TENANTS, tenantSay, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
@@ -707,6 +707,15 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   /** «Закупать сам»: утром жмёт «Закупить нужное» за игрока (без брака), купленное — сразу на полки. */
   const autoBuy = (state: StoreState): StoreState => shelveAll(autoMorning(state, priceFor(state), guestsToday(state)));
   if (autoActive(getState())) setState(autoBuy(getState()));
+  /** Одежда наверху завозится сама (game/clothes.ts clothesMorning, 27.11): после зала, на деньги сверх счетов. */
+  const fillRacks = (): void => {
+    const before = getState();
+    const after = clothesMorning(before);
+    if (after === before) return;
+    setState(after);
+    track('clothes_auto', after.day, before.money - after.money);
+  };
+  fillRacks();
 
   /**
    * Подсказка «что дальше» (game/nudge.ts): игрок застыл в меню, а важное не сделано — мягко светится
@@ -893,7 +902,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('careerLeft', state.career?.left);
     add('arc', !zarHere && arcToday(state));
     add('echo', !zarHere && echoNews(state));
-    add('van', !zarHere && vanNews(state));
     const picked = pickNews(state, ready);
     // Первого гостя ломбарда показали — дальше он приходит как все, даже без ответа (game/pawnshop.ts pawnMet).
     const met = picked.id === 'pawn' ? pawnMet(picked.state) : picked.state;
@@ -2165,8 +2173,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       // Серая схема (game/grey.ts): Жора с предложением мимо закона.
       case 'grey':
         return greyOfferBox(state, getState, update);
-      case 'van':
-        return vanNewsBox(state, getState, update);
       case 'arc':
         return arcBox(state, getState, update);
       case 'echo':
@@ -2448,13 +2454,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
               icon: 'assets/shop_van.png',
               title: t('van.title'),
               status: vanStatus(state),
-              alert: vanIdle(state),
-              details: () =>
-                vanBox(getState(), getState, update, () => {
-                  tab = 'buy';
-                  slideTab = true;
-                  render();
-                }),
+              details: () => vanBox(getState(), getState, update),
             },
           ]
         : []),
@@ -3868,19 +3868,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         }, 'ui-chip'),
       );
     }
-    // Сегодня есть куда выехать, а фургон пуст — к его плитке в «Уголках» (game/van.ts).
-    const vanEvent = vanToday(state);
-    if (vanEvent && vanIdle(state)) {
-      row(
-        t('van.todo', { icon: VAN_EVENTS[vanEvent].icon, name: vanEventName(state, vanEvent) }),
-        button(t('van.todoBtn'), () => {
-          tab = 'extras';
-          openCorner = 'van';
-          slideTab = true;
-          render();
-        }, 'ui-chip'),
-      );
-    }
     if (state.cat && !fedToday(state)) {
       row(t('todo.cat', { name: state.cat.name }), button(t('todo.catBtn', { n: FEED_COST }), () => update(feedCat(getState()), 'success'), 'ui-chip', state.money < FEED_COST));
     }
@@ -3905,12 +3892,16 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     return box;
   };
 
-  /** Строка сводки утра: что «Закупать сам» уже купил. */
+  /** Строка сводки утра: что утром закупили сами — зал («Закупать сам») и одежда наверху (clothesMorning), одной строкой. */
   const autoLine = (): HTMLElement[] => {
     const state = getState();
     const today = state.autoOrder?.today;
-    if (!autoActive(state) || today?.day !== state.day || !today.lines.length) return [];
-    return [el('div', 'ui-muted', t('auto.delivered', { list: today.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' '), cost: today.spent }))];
+    const parts: string[] = [];
+    if (autoActive(state) && today?.day === state.day && today.lines.length)
+      parts.push(t('auto.morningHall', { list: today.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' '), cost: today.spent }));
+    const clothes = clothesToday(state);
+    if (clothes) parts.push(t('auto.morningClothes', { n: clothes.n, cost: clothes.spent }));
+    return parts.length ? [el('div', 'ui-muted', t('auto.morning', { list: parts.join(', ') }))] : [];
   };
 
   const fairLine = (state: StoreState): HTMLElement[] => {

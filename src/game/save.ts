@@ -8,6 +8,7 @@ import { migrateBuying } from './buyMigrate';
 import { migrateCollections } from './collections';
 import { migrateCareer } from './career';
 import { migrateGear } from './gear';
+import { migrateVan } from './van';
 import { normalizePets } from './pets';
 import { normalizeZar } from './zarechye';
 import { normalizeNews } from './headlines';
@@ -91,6 +92,8 @@ export function loadGame(): StoreState | null {
   const calm = migrateCalm(merged);
   // Закупка и продажи упрощены (02.11): снятые улучшения, акция дня, договоры, «выгодная партия» (buyMigrate.ts).
   const state = migrateBuying(migrateTut(settleInbound(migrateAutoOrder(save.state.ownerTill ? calm : migrateOwnerTill(calm)))));
+  // Фургон ездит сам (27.11, van.ts): утром загруженный кузов из старого сохранения — на склад (что не влезло — продаём по закупке).
+  const vanFree = migrateVan(state);
   // До версии 11 мороженое и цветы стояли на обычных полках (теперь — ларь у входа и вёдра у кассы).
   // Альбом коллекций появился позже: старое сохранение сразу получает уже заработанное (collections.ts).
   // Карьера сотрудников появилась позже: опыт старых сотрудников — по их стажу (career.ts).
@@ -99,7 +102,7 @@ export function loadGame(): StoreState | null {
   // Перестановку полок убрали (08.11, решение автора): своя расстановка из старых сохранений больше не
   // применяется — у всех стандартная планировка помещения (и у второго магазина в Заречье).
   // 14.11, аудит: вернувшемуся после 13.11 — карточки уже открытых механик прочитаны, их назовёт «Что нового» (tips.ts).
-  return catchUpTips(dropPlacement(normalizeZar(migrateGear(migrateCareer(migrateCollections(normalizeShelves(state, save.version < 11)))))));
+  return catchUpTips(dropPlacement(normalizeZar(migrateGear(migrateCareer(migrateCollections(normalizeShelves(vanFree, save.version < 11)))))));
 }
 
 /** Своя расстановка полок, кассы и вещей зала (перестановка, убрана 08.11) — снять, в том числе у второго магазина. */

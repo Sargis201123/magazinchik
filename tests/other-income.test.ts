@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { emptyDayStats, newGame, type StoreState, type Unit } from '../src/game/economy';
 import { nightCycle, otherIncome, type NightSummary } from '../src/game/day';
 import { rentRoom, tenantIncome, tenantRent, tenantsNight } from '../src/game/tenants';
-import { autoLoad, buyVan, planTrip, vanEvents } from '../src/game/van';
+import { buyVan, vanEvents } from '../src/game/van';
 import { yardIncome } from '../src/game/garden';
 import { ru } from '../src/i18n/ru';
 
@@ -34,12 +34,12 @@ const matchDay = (): number => {
   throw new Error('нет матча');
 };
 
-/** Тот же магазин с арендаторами, бабушкиным двором на две грядки, прокатом у входа и загруженным на матч фургоном. */
+/** Тот же магазин с арендаторами, бабушкиным двором на две грядки, прокатом у входа и фургоном (в день матча он сам едет, 27.11). */
 const busy = (day: number): StoreState => {
   let s = shop({ day, rental: {}, garden: { beds: 2 } });
   s = rentRoom(s, 'pickup')!;
   s = rentRoom(s, 'pharmacy')!;
-  return autoLoad(planTrip(buyVan(s)!, 'match')!);
+  return buyVan(s)!;
 };
 
 const wealth = (s: StoreState): number => s.money - s.debt;
