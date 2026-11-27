@@ -23,6 +23,8 @@
 //   --port <номер>      порт своего сервера (по умолчанию 4173, занят — возьмёт следующий)
 //   DAY=134             другой игровой день в любом прогоне (погода и сезон по дню: снег 134, дождь 116, жара 163)
 //   FLOORSHOT=1         ещё прогоны flbare и flfull: все этажи открыты (голые / отделанные), кадр каждого этажа
+//   MEASURE=1           итоги дня цифрами (гости, почему ушли, ходки персонала); AUTO=1 — «Закупать сам», REG=4 — касс,
+//                       SHELF=0..3 — ступень всех полок, WH=0..3 — модель склада (0 — без тележки, 3 — автосклад)
 // Нужен Playwright с Chromium: npm i -D playwright && npx playwright install chromium
 // (свой Chromium — переменная CHROMIUM_PATH).
 
@@ -354,7 +356,7 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     for (const [k, v] of Object.entries(sh.items ?? {})) { const take = (v as unknown[]).slice(0, Math.max(0, left)); left -= take.length; items[k] = take; }
     return { ...sh, level: shelfLvl, items };
   });
-  const state = { ...save.state, gift: { lastDate: day, streak: 1 }, ...run.patch(save.state), ...(shelfLvl !== null ? { shelves: trimShelves(save.state.shelves as any[]) } : {}), ...(process.env.REG ? { registers: Number(process.env.REG) } : {}), ...(process.env.AUTO ? { autoOrder: { on: true } } : {}), ...(process.env.DAY ? { day: Number(process.env.DAY), plan: undefined } : {}) };
+  const state = { ...save.state, gift: { lastDate: day, streak: 1 }, ...run.patch(save.state), ...(shelfLvl !== null ? { shelves: trimShelves(save.state.shelves as any[]) } : {}), ...(process.env.REG ? { registers: Number(process.env.REG) } : {}), ...(process.env.WH ? { gear: { ...(save.state.gear as object), warehouse: Number(process.env.WH) } } : {}), ...(process.env.AUTO ? { autoOrder: { on: true } } : {}), ...(process.env.DAY ? { day: Number(process.env.DAY), plan: undefined } : {}) };
   await page.addInitScript(prepare, {
     save: JSON.stringify({ ...save, state }),
     seed: SEED,
@@ -493,7 +495,9 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
       const per: Record<string, string> = {};
       for (const sh of st.shelves) for (const [k, v] of Object.entries(sh.items ?? {})) per[k] = String((Number(per[k]?.split('/')[0]) || 0) + (v as unknown[]).length);
       for (const [k, v] of Object.entries(st.warehouse ?? {})) per[k] = `${per[k] ?? 0}/${(v as unknown[]).length}`;
-      return { came, missing: scene.stats.missing, per, fl, served, lost, revenue, lostWhy, work, quick, passed, quickQueue, shelves: st.shelves.reduce((n: number, sh: any) => n + count(sh.items), 0), warehouse: count(st.warehouse) };
+      // Деньги к закрытию и подвоз «Закупать сам» за день (сколько раз и на сколько): быстрее разбирают — чаще подвоз.
+      const auto = st.autoOrder?.today ? { topUps: st.autoOrder.today.topUps, spent: st.autoOrder.today.spent } : null;
+      return { came, missing: scene.stats.missing, per, fl, served, lost, revenue, lostWhy, work, quick, passed, quickQueue, shelves: st.shelves.reduce((n: number, sh: any) => n + count(sh.items), 0), warehouse: count(st.warehouse), money: st.money, auto };
     });
     console.log('MEASURE ' + JSON.stringify(m));
   }
