@@ -137,6 +137,14 @@ describe('завоз сам каждое утро', () => {
     expect(clothesToday(filled)).toEqual({ day: 60, n: RACK_PLACES[0], spent: RACK_PLACES[0] * cost });
   });
 
+  it('вечером в итог дня - сколько стоил утренний завоз (рядом с выручкой, «завоз утром −N»)', () => {
+    const filled = clothesMorning(upstairs());
+    expect(clothesNight(filled, 200).day?.restock).toBe(RACK_PLACES[0] * cost);
+    // Утром ничего не завозили - поля нет, итог вечера равен прогнозу утра.
+    const next = { ...filled, day: 61 };
+    expect(clothesNight(next, 200).day).toEqual(clothesPlan(next, 200));
+  });
+
   it('позвать снова — ничего не докупит; назавтра итог утра — с нуля', () => {
     const filled = clothesMorning(upstairs());
     expect(clothesMorning(filled)).toBe(filled);

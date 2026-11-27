@@ -257,11 +257,12 @@ export function clothesNight(state: StoreState, guests: number): { state: StoreS
   }
   const money = state.money + plan.income - plan.wage;
   const net = plan.income - plan.wage;
+  const restock = clothesToday(state)?.spent ?? 0;
   return {
     state: set(
       { ...state, money: Math.max(0, money), debt: state.debt + Math.max(0, -money) },
       { ...c, stock, last: { ...plan, day: state.day }, earned: (c.earned ?? 0) + net },
     ),
-    day: { ...plan, restock: clothesToday(state)?.spent ?? 0 },
+    day: restock ? { ...plan, restock } : plan,
   };
 }
