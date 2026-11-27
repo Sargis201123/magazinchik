@@ -31,7 +31,8 @@ import { TRASH_KEYS } from './textures';
 import { carryBonus } from '../game/owner';
 import { MANAGER_QTY, managerPick } from '../game/urgent';
 import { urgentSaving } from '../game/managerLog';
-import { binCapacity, gearTier, warehouseSpeed } from '../game/gear';
+import { binCapacity, gearTier } from '../game/gear';
+import { loaderLoad, loaderSpeed, LOADER_WALK_MAX, shelfToFill } from '../game/loader';
 import { registerOfRole, RELIEF_ROLE } from '../game/registers';
 import { note } from '../game/reviews';
 import {
@@ -216,12 +217,12 @@ export function restockShelf(scene: StoreScene, index: number): void {
   if (playDayOne(scene.state)) newcomer.onbStep(scene, 'stock');
 }
 
-/** Товар из коробки на полку: штуки вылетают по одной и встают на место с «чпок». */
-export function stockShelf(scene: StoreScene, index: number, by: Phaser.GameObjects.Container): void {
+/** Товар из коробки на полку: штуки вылетают по одной и встают на место с «чпок». load - во сколько раз больше обычной тележки (грузчик на пределе шага). */
+export function stockShelf(scene: StoreScene, index: number, by: Phaser.GameObjects.Container, load = 1): void {
   const view = scene.shelfViews[index];
   const before = view ? view.items.filter((img) => img.visible).length : 0;
   // Хозяин-силач носит больше (навык «Силач»), сотрудники — как обычно.
-  scene.state = moveToShelf(scene.state, index, undefined, by === scene.seller ? carryOf(scene.state) + carryBonus(scene.state) : staffCarry(scene.state)).state;
+  scene.state = moveToShelf(scene.state, index, undefined, by === scene.seller ? carryOf(scene.state) + carryBonus(scene.state) : Math.round(staffCarry(scene.state) * load)).state;
   // Без съезда: новые штуки сами летят на свои места, а сдвинутые соседи просто встают рядом.
   scene.refreshShelves(false);
   building.refreshWarehouse(scene);
@@ -686,9 +687,19 @@ export function workerWait(scene: StoreScene, w: Worker, ms: number): Promise<vo
   return scene.wait(ms / workerPace(scene, w));
 }
 
-/** Скорость сотрудника: его навык, менеджер на смене, а у грузчика — ещё и оборудование склада. */
+/**
+ * Скорость сотрудника: его навык, менеджер на смене, а у грузчика - ещё оборудование склада и размер магазина
+ * (game/loader.ts: 27.11 - в «Универмаге» вдвое быстрее, иначе полки пустели к обеду при полном складе).
+ */
 export function workerPace(scene: StoreScene, w: Worker): number {
-  return workSpeed(w.member) * managerBoost(scene.state) * (w.member.role === 'loader' ? warehouseSpeed(scene.state) : 1);
+  const pace = fullPace(scene, w);
+  // Грузчик не быстрее ×4 шага (game/loader.ts LOADER_WALK_MAX): остаток уходит в ношу (stockShelf load).
+  return w.member.role === 'loader' ? Math.min(pace, LOADER_WALK_MAX) : pace;
+}
+
+/** Скорость сотрудника без предела шага грузчика. */
+function fullPace(scene: StoreScene, w: Worker): number {
+  return workSpeed(w.member) * managerBoost(scene.state) * (w.member.role === 'loader' ? loaderSpeed(scene.state) : 1);
 }
 
 /**
@@ -955,7 +966,7 @@ export async function loaderLoop(scene: StoreScene, w: Worker, gen: number): Pro
       await deliveries.packParcel(scene, w, gen, parcel);
       continue;
     }
-    const index = scene.running ? shelfToRestock(scene) : -1;
+    const index = scene.running ? shelfToFill(scene.state) : -1;
     if (index < 0) {
       if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await workerWalk(scene, w, w.home.x, w.home.y);
       await scene.wait(400);
@@ -971,27 +982,9 @@ export async function loaderLoop(scene: StoreScene, w: Worker, gen: number): Pro
     await workerWait(scene, w, PLACE_MS);
     if (!scene.alive(gen)) return;
     w.carried.setVisible(false);
-    stockShelf(scene, index, w.sprite);
+    stockShelf(scene, index, w.sprite, loaderLoad(fullPace(scene, w)));
     credit(scene, w.member.role);
     // От ларя на улице — обратно в зал через дверь.
     await workerWalkVia(scene, w, route.slice(0, -1).reverse());
   }
-}
-
-/** Полка, которую стоит пополнить: место есть, а на складе есть подходящий товар. */
-/** Сначала полки со звёздочкой, потом те, где товар кончился, потом самые пустые. */
-export function shelfToRestock(scene: StoreScene): number {
-  let best = -1;
-  let bestScore = 0;
-  scene.state.shelves.forEach((shelf, i) => {
-    const free = shelfFree(shelf);
-    const hasGoods = PRODUCT_IDS.some((id) => canPlace(id, shelf) && (scene.state.warehouse[id] ?? []).some((u) => !u.pending));
-    const runningOut = PRODUCT_IDS.some(
-      (id) => canPlace(id, shelf) && (shelf.items[id]?.length ?? 0) === 0 && (scene.state.warehouse[id]?.length ?? 0) > 0,
-    );
-    if (!hasGoods || !(free >= 3 || (runningOut && free > 0))) return;
-    const score = (runningOut ? 100 : 0) + free;
-    if (score > bestScore) [best, bestScore] = [i, score];
-  });
-  return best;
 }

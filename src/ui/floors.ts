@@ -1,6 +1,6 @@
 // Раздел «Этажи» во вкладке «Развитие» (game/floors.ts, game/basement.ts, 13.11): открыть этаж, отделать его и
-// обустроить то, что на нём живёт. Подвал — целиком здесь; второй этаж (одежда) — открыть здесь, стойки и партии —
-// своим блоком в ui/clothes.ts; третий этаж (фудкорт, game/foodcourt.ts) — открыть и отделать здесь, а точки еды и то,
+// обустроить то, что на нём живёт. Подвал — целиком здесь; второй этаж (одежда) — открыть здесь, стойки, распродажа и
+// продавец — своим блоком в ui/clothes.ts; третий этаж (фудкорт, game/foodcourt.ts) — открыть и отделать здесь, а точки еды и то,
 // что на нём случается за день, — в плитке «Фудкорт» вкладки «Уголки».
 // Автоматы подаём сухо: что дают и чем за них платишь (гости, облавы, «крыша») — рядом, одной строкой, без «азарта».
 
@@ -32,8 +32,8 @@ import { track } from '../platform/analytics';
 import { button, el, toast } from './dom';
 import { setItemIcon } from './sheet';
 import { clothesRows } from './clothes';
-import { clothesOf, stockTotal } from '../game/clothes';
-import { stallPlaces, stallsOf, STALL_PLACES } from '../game/foodcourt';
+import { clothesMorning, clothesOf, stockTotal } from '../game/clothes';
+import { floorEstimate, foodPlan, stallPlaces, stallsOf, STALL_IDS, STALL_PLACES, STALLS } from '../game/foodcourt';
 import { pawnOf, pawnPlace, pawnSlots, pawnWaiting } from '../game/pawnshop';
 import { openPawnCard } from './pawnshop';
 
@@ -140,16 +140,20 @@ function openRow(state: StoreState, id: FloorId, getState: () => StoreState, upd
   const def = FLOORS[id];
   const look = FLOOR_ROW[id];
   const lock = floorLock(state, id);
-  const notes = [t(look.note)];
+  // Фудкорт (27.11): сколько этаж даст каждый вечер — до покупки, точками на всех местах голого этажа.
+  const notes = [id === 'third' ? t(look.note, { n: STALL_PLACES[0], setup: Math.min(...STALL_IDS.map((id) => STALLS[id].setup)), sum: floorEstimate(state) }) : t(look.note)];
   if (lock === 'level') notes.push(`🔒 ${t('floors.lock', { name: t(STORE_LEVELS[def.minLevel].nameKey) })}`);
   if (lock === 'below') notes.push(`🔒 ${t('floors.lockBelow')}`);
   return row(look.art, t(look.name), notes, [
     button(
       t('floor.open', { cost: def.cost }),
       () => {
-        const next = buyFloor(getState(), id);
-        if (!next) return;
-        track('floor_open', next.day, def.cost);
+        const bought = buyFloor(getState(), id);
+        if (!bought) return;
+        track('floor_open', bought.day, def.cost);
+        // Второй этаж: стойки заполняются сразу, дальше — сами каждое утро (game/clothes.ts clothesMorning, 27.11).
+        const next = id === 'second' ? clothesMorning(bought) : bought;
+        if (next !== bought) track('clothes_auto', next.day, bought.money - next.money);
         toast('assets/ico_shop.png', t(look.name), t(look.opened));
         update(next, 'success');
       },
@@ -159,10 +163,12 @@ function openRow(state: StoreState, id: FloorId, getState: () => StoreState, upd
   ]);
 }
 
-/** Третий этаж: открыть; открыт — как попасть, ремонт и где точки еды. */
+/** Третий этаж: открыть; открыт — как попасть, сколько точки дают сегодня, ремонт и где точки еды. */
 function thirdRows(state: StoreState, getState: () => StoreState, update: Update): HTMLElement[] {
   if (!floorOf(state, 'third')) return [openRow(state, 'third', getState, update)];
   const out: HTMLElement[] = [el('div', 'ui-item-sub', `🍕 ${t('floor.third.up')}`)];
+  const plan = foodPlan(state);
+  out.push(el('div', 'ui-item-sub', plan ? t('fc.today', { n: plan.eaters, sum: plan.income }) : t('fc.empty')));
   const fin = finishCost(state, 'third');
   if (fin !== null) {
     out.push(

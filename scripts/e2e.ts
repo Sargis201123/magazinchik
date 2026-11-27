@@ -23,6 +23,9 @@
 //   --port <номер>      порт своего сервера (по умолчанию 4173, занят — возьмёт следующий)
 //   DAY=134             другой игровой день в любом прогоне (погода и сезон по дню: снег 134, дождь 116, жара 163)
 //   FLOORSHOT=1         ещё прогоны flbare и flfull: все этажи открыты (голые / отделанные), кадр каждого этажа
+//   MEASURE=1           итоги дня цифрами (гости, почему ушли, ходки персонала); AUTO=1 - «Закупать сам», REG=4 - касс,
+//                       SHELF=0..3 - ступень всех полок, WH=0..3 - модель склада (0 - без тележки, 3 - автосклад)
+//   YARD=1              в сохранении бабушкин двор на три грядки и прокат у входа (старый вид полей)
 // Нужен Playwright с Chromium: npm i -D playwright && npx playwright install chromium
 // (свой Chromium — переменная CHROMIUM_PATH).
 
@@ -36,7 +39,7 @@ import { weatherFor } from '../src/game/weather';
 import { ru, type TextKey } from '../src/i18n/ru';
 import { buyFloor, buyFloorUp, finishFloor, FLOOR_UPGRADES, FLOOR_IDS } from '../src/game/floors';
 import { buyPart, buySlot, PART_IDS } from '../src/game/basement';
-import { buyBatch } from '../src/game/clothes';
+import { clothesMorning } from '../src/game/clothes';
 import { openStall, STALL_IDS } from '../src/game/foodcourt';
 import { isLang, type Lang } from '../src/i18n/langs';
 import { decodePng, encodePng } from './png';
@@ -97,7 +100,7 @@ const rainDay = (from: number): number => {
 /** Другой уровень помещения: полок не больше, чем мест под них. */
 const level = (n: number) => (state: SaveFile['state']) => ({ level: n, shelves: state.shelves.slice(0, STORE_LEVELS[n].slots) });
 
-/** FLOORSHOT: все этажи открыты — голые (bare) или отделанные до конца (full); точки еды сданы в аренду (своя — только с кухней). */
+/** FLOORSHOT: все этажи открыты — голые (bare) или отделанные до конца (full); точки еды стоят (без кухни — сданы). */
 function floorsState(base: any, full: boolean): any {
   let st: any = { ...base, level: 4, money: 10_000_000 };
   for (const id of FLOOR_IDS) st = buyFloor(st, id) ?? st;
@@ -108,8 +111,8 @@ function floorsState(base: any, full: boolean): any {
     }
     for (const p of PART_IDS) st = buyPart(st, p) ?? st;
     for (let i = 0; i < 6; i++) st = buySlot(st) ?? st;
-    for (let i = 0; i < 4; i++) st = buyBatch(st) ?? st;
-    for (const id of STALL_IDS) st = openStall(st, id, 'rent') ?? st;
+    st = clothesMorning(st);
+    for (const id of STALL_IDS) st = openStall(st, id) ?? st;
   }
   return { ...st, money: 50000 };
 }
@@ -344,6 +347,38 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
       (text ? buttons.find((b) => b.innerText.includes(text)) : buttons.pop())?.click();
     }, text);
   const scene = (visible: boolean) => page.evaluate((v) => (window as any).game.scene.getScene('store').sys.setVisible(v), visible);
+  /** YARD=1: утреннее окно до открытия - «Главное на сегодня», плитка проката в «Уголках», двор в «Развитии». */
+  const menuShots = async () => {
+    const snap = async (file: string) => {
+      await tick(600);
+      await page.screenshot({ path: SHOTS + file, animations: 'disabled' });
+      say(file);
+    };
+    await snap(`${run.name}-menu.png`);
+    await page.evaluate(() => document.querySelector<HTMLElement>('.ui-tab[data-tab="extras"]')?.click());
+    await tick(400);
+    await page.evaluate((title) => [...document.querySelectorAll<HTMLElement>('.ui-tile-card')].find((b) => b.innerText.includes(title))?.click(), text['rental.title']);
+    await tick(800);
+    await page.evaluate(() => document.querySelector('.ui-shelf-span')?.scrollIntoView({ block: 'center' }));
+    await snap(`${run.name}-menu-rental.png`);
+    await page.evaluate(() => document.querySelector<HTMLElement>('.ui-tab[data-tab="grow"]')?.click());
+    await tick(400);
+    const yardHead = (open: boolean) =>
+      page.evaluate(
+        ([title, open]) => {
+          const head = [...document.querySelectorAll<HTMLElement>('.ui-fold-head')].find((h) => h.innerText.includes(title as string));
+          if (open && head?.querySelector('.ui-fold-arrow')?.textContent?.startsWith('▸')) head.click();
+          head?.scrollIntoView({ block: 'center' });
+        },
+        [text['garden.title'], open] as const,
+      );
+    await yardHead(false);
+    await snap(`${run.name}-menu-yard-fold.png`);
+    await yardHead(true);
+    await snap(`${run.name}-menu-yard.png`);
+    await page.evaluate(() => document.querySelector<HTMLElement>('.ui-tab[data-tab="buy"]')?.click());
+    await tick(400);
+  };
 
   const day = new Date(NOW).toISOString().slice(0, 10);
   const shelfLvl = process.env.SHELF ? Number(process.env.SHELF) : null;
@@ -354,7 +389,9 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     for (const [k, v] of Object.entries(sh.items ?? {})) { const take = (v as unknown[]).slice(0, Math.max(0, left)); left -= take.length; items[k] = take; }
     return { ...sh, level: shelfLvl, items };
   });
-  const state = { ...save.state, gift: { lastDate: day, streak: 1 }, ...run.patch(save.state), ...(shelfLvl !== null ? { shelves: trimShelves(save.state.shelves as any[]) } : {}), ...(process.env.REG ? { registers: Number(process.env.REG) } : {}), ...(process.env.AUTO ? { autoOrder: { on: true } } : {}), ...(process.env.DAY ? { day: Number(process.env.DAY), plan: undefined } : {}) };
+  // YARD=1: бабушкин двор на три грядки и прокат у входа - в виде старого сохранения (урожай по часам, залог, 8 вещей из 10).
+  const yard = process.env.YARD ? { garden: { since: NOW - 13 * 3600_000, harvests: 5, more: [{ crop: 'apples', since: NOW - 13 * 3600_000 }, { crop: 'quick', since: NOW - 3600_000 }] }, rental: { stock: 8, deposit: 'medium' } } : {};
+  const state = { ...save.state, gift: { lastDate: day, streak: 1 }, ...run.patch(save.state), ...(shelfLvl !== null ? { shelves: trimShelves(save.state.shelves as any[]) } : {}), ...(process.env.REG ? { registers: Number(process.env.REG) } : {}), ...(process.env.WH ? { gear: { ...(save.state.gear as object), warehouse: Number(process.env.WH) } } : {}), ...(process.env.AUTO ? { autoOrder: { on: true } } : {}), ...(process.env.DAY ? { day: Number(process.env.DAY), plan: undefined } : {}), ...yard };
   await page.addInitScript(prepare, {
     save: JSON.stringify({ ...save, state }),
     seed: SEED,
@@ -402,6 +439,7 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     if (s.title) await press(text['title.continue']);
     else if (s.dialog) await press();
     else if (s.open && s.modals <= 1) {
+      if (process.env.YARD) await menuShots();
       await press(text['morning.open']);
       break;
     } else if (s.modals) await press();
@@ -456,6 +494,12 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     if (!s.dayOpen || s.night) throw new Error(`день кончился раньше кадра «${name}»`);
     await shot(name);
   }
+  // YARD=1: кнопка «🌱» - камера у бабушкиного двора (грядки к вечеру, огородник).
+  if (process.env.YARD) {
+    await page.evaluate(() => document.querySelector<HTMLElement>('.ui-yard')?.click());
+    await tick(900);
+    await shot('yard');
+  }
   if (process.env.FLOORSHOT && run.name.startsWith('fl')) {
     for (const id of ['basement', 'second', 'third']) {
       await page.evaluate(`document.querySelector('[data-floor="${id}"]')?.click()`);
@@ -493,7 +537,9 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
       const per: Record<string, string> = {};
       for (const sh of st.shelves) for (const [k, v] of Object.entries(sh.items ?? {})) per[k] = String((Number(per[k]?.split('/')[0]) || 0) + (v as unknown[]).length);
       for (const [k, v] of Object.entries(st.warehouse ?? {})) per[k] = `${per[k] ?? 0}/${(v as unknown[]).length}`;
-      return { came, missing: scene.stats.missing, per, fl, served, lost, revenue, lostWhy, work, quick, passed, quickQueue, shelves: st.shelves.reduce((n: number, sh: any) => n + count(sh.items), 0), warehouse: count(st.warehouse) };
+      // Деньги к закрытию и подвоз «Закупать сам» за день (сколько раз и на сколько): быстрее разбирают - чаще подвоз.
+      const auto = st.autoOrder?.today ? { topUps: st.autoOrder.today.topUps, spent: st.autoOrder.today.spent } : null;
+      return { came, missing: scene.stats.missing, per, fl, served, lost, revenue, lostWhy, work, quick, passed, quickQueue, shelves: st.shelves.reduce((n: number, sh: any) => n + count(sh.items), 0), warehouse: count(st.warehouse), money: st.money, auto };
     });
     console.log('MEASURE ' + JSON.stringify(m));
   }

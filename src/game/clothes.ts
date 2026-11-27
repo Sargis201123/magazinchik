@@ -2,11 +2,12 @@
 // одежда ведётся отдельно от продуктов — свой запас на стойках, своя касса, свои покупатели.
 //  · коллекция по сезону: к холодам — куртки и шапки, весной и осенью — плащи и зонты, летом — футболки и шорты.
 //    Коллекции меняются с месяцем (а не с погодой за окном): магазин одежды завозит тёплое заранее, к холодам;
-//  · закупка — партиями в меню этажа («Развитие» → «Этажи»), только текущей коллекции;
+//  · закупка — сама (27.11, автор: «убрать кнопку завезти»): каждое утро стойки пополняются до полных текущей
+//    коллекцией, деньги — из кассы, как у «Закупать сам», но только сверх прогноза счетов (clothesMorning);
 //  · продажи — вечером: часть гостей магазина поднимается наверх. Сколько — от гостей дня, погоды (в ливень плащи
 //    нарасхват, в жару куртки никому не нужны), продавца-консультанта и ремонта этажа;
-//  · сезон сменился — остатки старой коллекции либо распродаются за полцены (распродажа), либо пылятся на стойках
-//    и занимают места до своего сезона через год;
+//  · сезон сменился — остатки старой коллекции сами уходят на распродажу за полцены (27.11: переключателя нет —
+//    полцены бирки = закупочная цена, распродажа не в убыток);
 //  · продавец-консультант этажа: платим каждый вечер, зато покупают заметно больше;
 //  · улучшения этажа (14.11, clothesUps.ts): витрины и примерочная — покупателей больше, бренды — бирка дороже.
 //
@@ -15,7 +16,7 @@
 // В Заречье этаж Центра закрыт — одежда ждёт хозяина. Вид этажа — scenes/floors/secondFloor.ts, вход с улицы —
 // scenes/clothesFx.ts, меню — ui/clothes.ts.
 
-import type { StoreState } from './economy';
+import { billTotal, monthlyBill, type StoreState } from './economy';
 import { monthInYear } from './calendar';
 import { weatherToday } from './crisis';
 import { floorBonus, floorOf } from './floors';
@@ -41,8 +42,6 @@ export const COLLECTION_DEFS: Record<Collection, CollectionDef> = {
   summer: { cost: 40, price: 80, icon: '👕' },
 };
 
-/** Партия: столько вещей привозят за раз. */
-export const BATCH = 10;
 /** Мест на стойках: голый этаж — 40 вещей, после ремонта (отделка floors.ts) — 60. */
 export const RACK_PLACES = [40, 60];
 /**
@@ -58,7 +57,7 @@ export const FINISH_BOOST = 1.2;
 /** Продавец-консультант: столько платим каждый вечер — и во столько раз больше покупают. */
 export const CLERK_WAGE = 110;
 export const CLERK_BOOST = 1.4;
-/** Распродажа остатков старой коллекции: скидка и какая доля гостей на неё заглядывает. */
+/** Распродажа остатков старой коллекции (идёт сама, пока они есть): скидка и какая доля гостей на неё заглядывает. */
 export const SALE_OFF = 0.5;
 export const SALE_SHARE = 0.025;
 /** В последние столько дней коллекции меню предупреждает: скоро сменится. */
@@ -98,13 +97,24 @@ export interface ClothesDay {
   sale: number;
   income: number;
   wage: number;
+  /** Вечер: сколько стоил утренний завоз этого дня (clothes.today) - в итогах под «Подробнее», рядом с выручкой. */
+  restock?: number;
+}
+
+/** Утренний завоз: сколько вещей привезли сегодня и за сколько (строка «Утром закупили» в сводке утра). */
+export interface ClothesMorning {
+  day: number;
+  n: number;
+  spent: number;
 }
 
 export interface ClothesState {
   /** Сколько вещей каждой коллекции на стойках. */
   stock?: Partial<Record<Collection, number>>;
-  /** Распродажа остатков прошлых коллекций включена. */
+  /** До 27.11: переключатель распродажи. Теперь распродажа идёт сама — поле не читается. */
   sale?: boolean;
+  /** Сегодняшний утренний завоз. */
+  today?: ClothesMorning;
   /** Нанят продавец-консультант. */
   clerk?: boolean;
   /** Прошлый вечер — для карточки в «Этажах». */
@@ -154,28 +164,36 @@ export const salePrice = (state: StoreState, id: Collection): number => Math.rou
 /** Во сколько раз улучшения этажа (витрины — гостей наверх больше, примерочная — вещь берут чаще) умножают покупателей. */
 export const upsBoost = (state: StoreState): number => (1 + floorBonus(state, 'second', 'guests')) * (1 + floorBonus(state, 'second', 'buyers'));
 
-/** Цена партии текущей коллекции (или сколько влезет, если мест меньше партии). */
-export function batchSize(state: StoreState): number {
-  return Math.min(BATCH, freePlaces(state));
-}
-export const batchCost = (state: StoreState): number => batchSize(state) * COLLECTION_DEFS[collectionFor(state.day)].cost;
+/**
+ * Сколько денег завоз одежды не трогает: прогноз ближайших счетов (как строка «Счета через N дн.» утром). Зал,
+ * одежда и счета в один день не уведут кассу в долг.
+ */
+export const clothesReserve = (state: StoreState): number => billTotal(monthlyBill(state));
 
-/** Закупить партию текущей коллекции: деньги сразу, вещи — на стойки. */
-export function buyBatch(state: StoreState): StoreState | null {
+/**
+ * Утренний завоз (27.11, автор: «убрать кнопку завезти»): стойки пополняются текущей коллекцией до полных — по
+ * закупочной цене, на деньги сверх прогноза счетов; денег мало — сколько хватает. Можно звать снова (открыли этаж,
+ * отделали — мест стало больше): докупит только недостающее, сегодняшний итог копится в clothes.today.
+ */
+export function clothesMorning(state: StoreState): StoreState {
   const c = clothesOf(state);
-  const n = batchSize(state);
-  const cost = batchCost(state);
-  if (!c || n <= 0 || state.money < cost) return null;
+  if (!c) return state;
   const coll = collectionFor(state.day);
-  return set({ ...state, money: state.money - cost }, { ...c, stock: { ...c.stock, [coll]: (c.stock?.[coll] ?? 0) + n } });
+  const cost = COLLECTION_DEFS[coll].cost;
+  const n = Math.min(freePlaces(state), Math.floor(Math.max(0, state.money - clothesReserve(state)) / cost));
+  if (n <= 0) return state;
+  const today = c.today?.day === state.day ? c.today : { day: state.day, n: 0, spent: 0 };
+  return set(
+    { ...state, money: state.money - n * cost },
+    { ...c, stock: { ...c.stock, [coll]: (c.stock?.[coll] ?? 0) + n }, today: { day: state.day, n: today.n + n, spent: today.spent + n * cost } },
+  );
 }
 
-export function setSale(state: StoreState, sale: boolean): StoreState | null {
-  const c = clothesOf(state);
-  if (!c || Boolean(c.sale) === sale) return null;
-  const { sale: _sale, ...rest } = c;
-  return set(state, sale ? { ...c, sale: true } : rest);
-}
+/** Что завезли сегодня утром (null — ничего). */
+export const clothesToday = (state: StoreState): ClothesMorning | null => {
+  const today = clothesOf(state)?.today;
+  return today?.day === state.day && today.n > 0 ? today : null;
+};
 
 export function setClerk(state: StoreState, clerk: boolean): StoreState | null {
   const c = clothesOf(state);
@@ -196,17 +214,15 @@ export function clothesPlan(state: StoreState, guests: number): ClothesDay | nul
   const buyers = Math.round(Math.max(0, guests) * BUY_SHARE * weatherFit(coll, weatherToday(state)) * boost * (0.75 + 0.5 * roll(state, 1)));
   const sold = Math.min(c.stock?.[coll] ?? 0, buyers);
   let income = sold * tagPrice(state, coll);
-  // Распродажа: на скидку заглядывают свои покупатели — остатки уходят по старшинству коллекций.
+  // Распродажа (идёт сама, пока есть остатки): на скидку заглядывают свои покупатели — уходят по старшинству коллекций.
   let sale = 0;
-  if (c.sale) {
-    let want = Math.round(Math.max(0, guests) * SALE_SHARE * (c.clerk ? CLERK_BOOST : 1) * (0.75 + 0.5 * roll(state, 2)));
-    for (const id of COLLECTIONS) {
-      if (id === coll || want <= 0) continue;
-      const n = Math.min(want, c.stock?.[id] ?? 0);
-      want -= n;
-      sale += n;
-      income += n * salePrice(state, id);
-    }
+  let want = Math.round(Math.max(0, guests) * SALE_SHARE * (c.clerk ? CLERK_BOOST : 1) * (0.75 + 0.5 * roll(state, 2)));
+  for (const id of COLLECTIONS) {
+    if (id === coll || want <= 0) continue;
+    const n = Math.min(want, c.stock?.[id] ?? 0);
+    want -= n;
+    sale += n;
+    income += n * salePrice(state, id);
   }
   return { coll, buyers, sold, sale, income, wage: c.clerk ? CLERK_WAGE : 0 };
 }
@@ -241,11 +257,12 @@ export function clothesNight(state: StoreState, guests: number): { state: StoreS
   }
   const money = state.money + plan.income - plan.wage;
   const net = plan.income - plan.wage;
+  const restock = clothesToday(state)?.spent ?? 0;
   return {
     state: set(
       { ...state, money: Math.max(0, money), debt: state.debt + Math.max(0, -money) },
       { ...c, stock, last: { ...plan, day: state.day }, earned: (c.earned ?? 0) + net },
     ),
-    day: plan,
+    day: restock ? { ...plan, restock } : plan,
   };
 }

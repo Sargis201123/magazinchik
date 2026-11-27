@@ -1,34 +1,39 @@
-// Плитка «Фудкорт» во вкладке «Уголки» (game/foodcourt.ts, 13.11): точки еды третьего этажа — обустроить, сдать или
-// вести самим, — а сверху то, что ждёт решения сегодня: день рождения (заказ торта и напитков) или жалоба в
-// санинспекцию. Открыть сам этаж и отделать его — в «Развитии», раздел «Этажи» (ui/floors.ts).
+// Плитка «Фудкорт» во вкладке «Уголки» (game/foodcourt.ts, 13.11): точки еды третьего этажа — открыть или убрать, —
+// а сверху то, что ждёт решения сегодня: день рождения (заказ торта и напитков). Открыть сам этаж и отделать его —
+// в «Развитии», раздел «Этажи» (ui/floors.ts).
+//
+// 27.11, автор: «сдать или вести самим? и сотрудника туда нанимать?» Выбора больше нет: у свободного места одна кнопка
+// «Открыть» и сколько точка даст каждый вечер — до оплаты. Точки ведёт кто выгоднее (game/foodcourt.ts foodRun), и
+// одна строка в шапке говорит, кто ведёт сейчас и как заработать больше — с цифрами и где это купить или нанять.
+// Жалоба в санинспекцию решается сама: точка закрыта на вечер — строкой у точки и в итогах дня, без вопроса и без
+// красной точки на «Уголках».
 
 import { t, type TextKey } from '../i18n';
-import { PRODUCTS, type ProductId, type StoreState } from '../game/economy';
-import { kitchenWorking } from '../game/kitchen';
+import { PRODUCTS, STAFF_ROLES, type ProductId, type StoreState } from '../game/economy';
+import { UPGRADES } from '../game/upgrades';
 import {
-  answerInspection,
   answerParty,
   closeStall,
   foodcourtGuests,
+  floorEstimate,
   foodcourtOf,
   foodPlan,
-  inspectAnswer,
-  inspectionToday,
+  foodRun,
   isFoodWeekend,
   openStall,
-  ownAllowed,
   partyAnswer,
   partyToday,
-  setStallMode,
+  stallEstimate,
   stallLock,
-  stallMode,
   stallPlaces,
-  stallRent,
   stallsOf,
   STALL_IDS,
   STALLS,
+  type FoodRun,
   type StallId,
+  type StallPlan,
 } from '../game/foodcourt';
+import { inZar } from '../game/zarshop';
 import { track } from '../platform/analytics';
 import { button, el, toast } from './dom';
 import { row, warn } from './floors';
@@ -40,14 +45,28 @@ export const stallName = (id: StallId): string => t(`fc.stall.${id}` as TextKey)
 /** Статус плитки: сколько точек стоит из скольких мест. */
 export const foodcourtStatus = (state: StoreState): string => `${stallsOf(state).length}/${stallPlaces(state)}`;
 
-/** Плитка зовёт: сегодня ждёт ответа праздник или жалоба. */
-export const foodcourtAlert = (state: StoreState): boolean =>
-  (partyToday(state) !== null && partyAnswer(state) === null) || (inspectionToday(state) !== null && inspectAnswer(state) === null);
+/** Плитка зовёт: сегодня ждёт ответа праздник (жалоба решается сама — о ней не зовём). */
+export const foodcourtAlert = (state: StoreState): boolean => partyToday(state) !== null && partyAnswer(state) === null;
 
 const itemsLine = (items: Partial<Record<ProductId, number>>): string =>
   Object.entries(items)
     .map(([id, n]) => `${PRODUCTS[id as ProductId].icon} ${t(PRODUCTS[id as ProductId].nameKey)} ×${n}`)
     .join(', ');
+
+/** Кто ведёт точки и как заработать больше — с цифрами сегодняшнего вечера и где купить Кухню или нанять повара. */
+function runLine(state: StoreState): string | null {
+  const run = foodRun(state);
+  // Пустой этаж без Кухни: сразу видно, сколько дадут все места сданными, с Кухней и с поваром (в среднем за вечер).
+  if (!foodPlan(state)) {
+    if (run !== 'rent' || inZar(state)) return null;
+    const all = (r: FoodRun) => floorEstimate(state, r);
+    return t('fc.run.empty', { rent: all('rent'), cost: UPGRADES.kitchen.price, own: all('kitchen'), cook: all('cook') });
+  }
+  const sum = (r: 'kitchen' | 'cook') => foodPlan(state, r)?.income ?? 0;
+  if (run === 'rent') return t('fc.run.rent', { cost: UPGRADES.kitchen.price, own: sum('kitchen'), cook: sum('cook') });
+  if (run === 'kitchen') return t('fc.run.kitchen', { wage: STAFF_ROLES.cook.wage, cook: sum('cook') });
+  return t('fc.run.cook');
+}
 
 export function foodcourtBox(state: StoreState, getState: () => StoreState, update: Update): HTMLElement[] {
   const fc = foodcourtOf(state);
@@ -80,53 +99,42 @@ export function foodcourtBox(state: StoreState, getState: () => StoreState, upda
     } else box.append(el('div', 'ui-muted', t(answer ? 'fc.party.done' : 'fc.party.skipped')));
     out.push(box);
   }
-  const ins = inspectionToday(state);
-  if (ins) {
-    const box = el('div', 'ui-box');
-    box.append(el('b', '', t('fc.inspect.title')));
-    const answer = inspectAnswer(state);
-    if (answer === null) {
-      box.append(el('div', '', t('fc.inspect.text', { name: stallName(ins.stall), sum: ins.fix })));
-      if (stallMode(state, ins.stall) === 'rent') box.append(el('div', 'ui-muted', t('fc.inspect.half')));
-      const chips = el('div', 'ui-chips');
-      chips.append(
-        button(t('fc.inspect.fix', { sum: ins.fix }), () => update(answerInspection(getState(), true), 'success'), 'ui-chip hood-buy', state.money < ins.fix),
-        button(t('fc.inspect.close'), () => update(answerInspection(getState(), false)), 'ui-chip'),
-      );
-      box.append(chips);
-    } else box.append(el('div', 'ui-muted', answer ? t('fc.inspect.fixed') : t('fc.inspect.closed', { name: stallName(ins.stall) })));
-    out.push(box);
-  }
 
   const box = el('div', 'ui-box');
-  box.append(el('b', '', `🍕 ${t('floor.third')} · ${t('fc.places', { n: stallsOf(state).length, max: stallPlaces(state) })}`), el('div', 'ui-muted', t('fc.note')));
+  box.append(el('b', '', `🍕 ${t('floor.third')} · ${t('fc.places', { n: stallsOf(state).length, max: stallPlaces(state) })}`));
   const plan = foodPlan(state);
+  if (plan) box.append(el('div', 'ui-item-sub', t('fc.today', { n: plan.eaters, sum: plan.income })));
+  const run = runLine(state);
+  if (run) box.append(el('div', 'ui-item-sub', run));
+  // Ответ на «сотрудника туда нанимать?» — прямо и на виду (не под «❔»).
+  box.append(el('div', 'ui-item-sub', t('fc.note')));
   if (plan) {
-    box.append(el('div', 'ui-item-sub', t('fc.today', { n: plan.eaters, sum: plan.income })));
     box.append(el('div', 'ui-item-sub', t('fc.guests', { p: Math.round((foodcourtGuests(state) - 1) * 1000) / 10 })));
     if (isFoodWeekend(state)) box.append(el('div', 'ui-item-sub', t('fc.weekend')));
   }
   const last = fc.last;
   if (last && last.day === state.day - 1) box.append(el('div', 'ui-item-sub', t('fc.last', { n: last.eaters, sum: last.income })));
-  if (!ownAllowed(state)) box.append(el('div', 'ui-item-sub', t('fc.ownLock')));
-  else if (!kitchenWorking(state)) box.append(warn(t('fc.ownNoCook')));
   const here = stallsOf(state);
-  for (const id of STALL_IDS) if (here.includes(id)) box.append(stallRow(state, id, plan?.stalls.find((p) => p.id === id)?.income ?? 0, getState, update));
-  // Свободные места: кого ещё можно пустить.
   const full = here.length >= stallPlaces(state);
-  if (full && here.length < STALL_IDS.length) box.append(el('div', 'ui-muted', t('fc.full')));
+  // «Убрать» — только когда есть кого пустить вместо: места заняты, а какой-то точки нет (до ремонта). Иначе убирать
+  // незачем — вечер только станет беднее, а лишняя кнопка у каждой точки — шум.
+  const swap = full && here.length < STALL_IDS.length;
+  for (const id of STALL_IDS) {
+    const p = plan?.stalls.find((s) => s.id === id);
+    if (here.includes(id) && p) box.append(stallRow(id, p, swap, getState, update));
+  }
+  // Свободные места: кого ещё можно пустить.
+  if (swap) box.append(el('div', 'ui-muted', t('fc.full')));
   if (!full) for (const id of STALL_IDS) if (!here.includes(id)) box.append(newRow(state, id, getState, update));
   out.push(box);
   return out;
 }
 
-/** Точка уже стоит: как работает, сколько даст вечером, переключить «сдать / своя», убрать. */
-function stallRow(state: StoreState, id: StallId, income: number, getState: () => StoreState, update: Update): HTMLElement {
-  const mode = stallMode(state, id)!;
-  const notes = [mode === 'own' ? t('fc.own', { sum: income }) : t('fc.rent', { sum: income })];
-  const actions: HTMLElement[] = [];
-  if (mode === 'own') actions.push(button(t('fc.toRent'), () => update(setStallMode(getState(), id, 'rent')), 'ui-chip'));
-  else if (ownAllowed(state)) actions.push(button(t('fc.toOwn'), () => update(setStallMode(getState(), id, 'own')), 'ui-chip'));
+/** Точка уже стоит: сколько даст вечером (или почему сегодня закрыта) и, если есть кого пустить вместо, «Убрать». */
+function stallRow(id: StallId, plan: StallPlan, swap: boolean, getState: () => StoreState, update: Update): HTMLElement {
+  // Закрыта по жалобе — просто строка, не красным: делать ничего не надо, завтра снова работает.
+  const note = plan.closed ? t('fc.closedToday') : t('fc.income', { sum: plan.income });
+  if (!swap) return row(`fc_${id}`, stallName(id), [note], []);
   // Убрать — со второго касания: обустройство не возвращают, случайный тап стоил бы тысяч.
   let sure = false;
   const close = button(
@@ -138,8 +146,7 @@ function stallRow(state: StoreState, id: StallId, income: number, getState: () =
     },
     'ui-chip',
   );
-  actions.push(close);
-  return row(`fc_${id}`, stallName(id), [...notes, chips(actions)], []);
+  return row(`fc_${id}`, stallName(id), [note, chips([close])], []);
 }
 
 /** Кнопки — строкой под описанием (как у сезонного торговца, ui/tenants.ts): справа они сжимали текст в столбик. */
@@ -150,18 +157,20 @@ function chips(actions: HTMLElement[]): HTMLElement {
   return line;
 }
 
-/** Свободное место: обустроить точку — и сразу сдать или вести самим (со своей кухней). */
+/** Свободное место: сколько точка даст каждый вечер — до оплаты, и одна кнопка «Открыть». */
 function newRow(state: StoreState, id: StallId, getState: () => StoreState, update: Update): HTMLElement {
   const cost = STALLS[id].setup;
-  const locked = stallLock(state, id) !== null;
-  const open = (mode: 'rent' | 'own') => () => {
-    const next = openStall(getState(), id, mode);
-    if (!next) return;
-    track('fc_stall', next.day, cost);
-    toast('assets/ico_shop.png', stallName(id), t(mode === 'own' ? 'fc.opened.own' : 'fc.opened.rent'));
-    update(next, 'success');
-  };
-  const actions = [button(t('fc.open.rent', { cost }), open('rent'), 'ui-chip', locked)];
-  if (ownAllowed(state)) actions.push(button(t('fc.open.own', { cost }), open('own'), 'ui-chip', locked));
-  return row(`fc_${id}`, stallName(id), [t('fc.setup', { rent: stallRent(state, id) }), chips(actions)], []);
+  const open = button(
+    t('fc.open', { cost }),
+    () => {
+      const next = openStall(getState(), id);
+      if (!next) return;
+      track('fc_stall', next.day, cost);
+      toast('assets/ico_shop.png', stallName(id), t('fc.opened'));
+      update(next, 'success');
+    },
+    'ui-chip',
+    stallLock(state, id) !== null,
+  );
+  return row(`fc_${id}`, stallName(id), [t('fc.setup', { sum: stallEstimate(state, id) }), chips([open])], []);
 }

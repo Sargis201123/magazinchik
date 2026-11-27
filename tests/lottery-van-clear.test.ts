@@ -21,7 +21,7 @@ import {
   WIN_BONUS,
   WIN_CHANCE,
 } from '../src/game/lottery';
-import { settleVan, vanCalendar, vanDemand, vanEvents, vanTaken, VAN_EVENTS, type VanResult } from '../src/game/van';
+import { settleVan, vanCalendar, vanCargo, vanEvents, vanGain, vanTripOn, vanWant, VAN_EVENTS, type VanResult } from '../src/game/van';
 import { hasLicense } from '../src/game/license';
 
 // Лотерея и фургон понятные (15.11, автор): у лотереи — статистика билетов и тиражей, мгновенные выигрыши
@@ -164,7 +164,7 @@ describe('лотерея: тиражи и крупный выигрыш в ст�
 describe('фургон: календарь выездов и итог', () => {
   const van = (over: Partial<StoreState> = {}): StoreState => shop({ level: 2, van: { since: 1 }, ...over });
 
-  it('календарь: ближайшие выезды по порядку, с сегодняшнего дня, не больше n и не дальше горизонта', () => {
+  it('календарь: ближайшие выезды по порядку, с сегодняшнего дня, не больше n и не дальше горизонта, по одному в день', () => {
     const s = van();
     const plan = vanCalendar(s, 5, 14);
     expect(plan.length).toBeGreaterThan(0);
@@ -174,32 +174,34 @@ describe('фургон: календарь выездов и итог', () => {
       expect(p.day).toBeGreaterThanOrEqual(s.day);
       expect(p.day).toBeLessThanOrEqual(s.day + 14);
       expect(vanEvents(s, p.day)).toContain(p.event);
-      expect(p.demand).toBe(vanDemand(s, p.event));
-      if (i) expect(p.day).toBeGreaterThanOrEqual(plan[i - 1].day);
+      // 27.11: фургон ездит сам — в календаре то, куда он поедет, и сколько обычно приносит.
+      expect(p.event).toBe(vanTripOn(s, p.day));
+      expect(p.gain).toBe(vanGain(s, p.event, p.day));
+      if (i) expect(p.day).toBeGreaterThan(plan[i - 1].day);
     }
     // Каждый день с выездом в пределах горизонта есть в календаре, пока не набрали n.
     const full = vanCalendar(s, 99, 14);
     let expected = 0;
-    for (let d = 0; d <= 14; d++) expected += vanEvents(s, s.day + d).length;
+    for (let d = 0; d <= 14; d++) if (vanTripOn(s, s.day + d)) expected++;
     expect(full.length).toBe(expected);
-    // Матч — каждую неделю: за 14 дней хоть один выезд найдётся.
-    expect(full.some((p) => p.event === 'match')).toBe(true);
     expect(vanCalendar(s, 0)).toEqual([]);
   });
 
   it('спрос события: пиво и сигареты — только с лицензией', () => {
     const s = van();
     expect(hasLicense(s)).toBe(false);
-    const all = Object.values(VAN_EVENTS.match.wants).reduce((a, b) => a + (b ?? 0), 0);
-    expect(vanDemand(s, 'match')).toBe(all - (VAN_EVENTS.match.wants.beer ?? 0) - (VAN_EVENTS.match.wants.cigarettes ?? 0));
-    expect(vanDemand(s, 'beach')).toBe(Object.values(VAN_EVENTS.beach.wants).reduce((a, b) => a + (b ?? 0), 0));
+    expect(vanWant(s, 'match', 'beer')).toBe(0);
+    expect(vanWant(s, 'match', 'cigarettes')).toBe(0);
+    expect(vanCargo(s, 'match').some((c) => c.id === 'beer' || c.id === 'cigarettes')).toBe(false);
+    expect(Object.keys(VAN_EVENTS.match.wants)).toContain('beer');
   });
 
-  it('«взял в кузов» = продал + привёз + испортилось; старый итог без новых полей читается', () => {
-    const r: VanResult = { day: 29, event: 'match', sold: 10, revenue: 300, back: 4, spoiled: 2, extra: 0, fuel: 80, net: 220 };
-    expect(vanTaken(r)).toBe(16);
-    // Пустой выезд — ничего не меняется (settleVan без кузова).
-    const s = van({ van: { since: 1, last: r } });
+  it('старый итог (до 27.11: «назад» и «испортилось», без товара) читается; без выезда ночь ничего не меняет', () => {
+    const r = { day: 29, event: 'match', sold: 10, revenue: 300, back: 4, spoiled: 2, extra: 0, fuel: 80, net: 220 } as VanResult;
+    let day = 30;
+    while (vanTripOn(van({ day }))) day++;
+    const s = van({ day, van: { since: 1, last: r } });
     expect(settleVan(s).state).toBe(s);
+    expect(s.van?.last?.goods).toBeUndefined();
   });
 });

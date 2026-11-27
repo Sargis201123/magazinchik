@@ -13,7 +13,8 @@ import * as persons from './persons';
 import * as effects from './effects';
 import * as motion from './motion';
 import * as shelves from './shelves';
-import { shelfToRestock, stockShelf } from './staff';
+import { stockShelf } from './staff';
+import { levelPace, shelfToFill } from '../game/loader';
 import { slotOf } from '../game/economy';
 
 /** Форма ученика: как на портретах (art/apprentice.py). */
@@ -115,14 +116,17 @@ async function tillLoop(scene: StoreScene, me: Phaser.GameObjects.Container, _bo
   }
 }
 
-/** Склад: как грузчик, только медленнее (а к концу учёбы — шустрее) — сам носит коробки туда, где пустеет. */
+/**
+ * Склад: как грузчик, только медленнее (а к концу учёбы - шустрее) - сам носит коробки туда, где пустеет. В большом
+ * магазине, как и грузчик, ходит быстрее (game/loader.ts levelPace).
+ */
 async function stockLoop(scene: StoreScene, me: Phaser.GameObjects.Container, box: Phaser.GameObjects.Image, alive: () => boolean): Promise<void> {
   const home = { x: me.x, y: me.y };
   while (alive()) {
     if (scene.night) return goHome(scene, me, alive);
-    const pace = apprStockPace(scene.state) || 1;
+    const pace = (apprStockPace(scene.state) || 1) * levelPace(scene.state);
     const speed = STAFF_SPEED * pace;
-    const index = scene.running ? shelfToRestock(scene) : -1;
+    const index = scene.running ? shelfToFill(scene.state) : -1;
     if (index < 0) {
       if (Phaser.Math.Distance.Between(me.x, me.y, home.x, home.y) > 2) await persons.walk(scene, me, home.x, home.y, speed);
       await scene.wait(500);

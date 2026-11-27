@@ -78,8 +78,8 @@ import {
 import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd, type AdId } from './ads';
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { buyZar, homeShop, inZar, switchToday, ZAR_MAX_LEVEL, ZAR_PRICE } from './zarechye';
-import { canStock, restockPlan } from './restock';
-import { addBed, bedsOf, buildGarden, GARDEN_PRICE, harvest, nextBedCost, plant, type CropId } from './garden';
+import { restockPlan } from './restock';
+import { addBed, buildGarden, GARDEN_PRICE, nextBedCost } from './garden';
 import { freeRooms, giveTenant, invitePitch, rentRoom, TENANT_IDS, TENANTS, tenantAsks, tenantsOf, upgradeCost as tenantUpCost, upgradeTenant } from './tenants';
 import { pawnOffer, refusePawn, takePawn } from './pawnshop';
 import { buyLine } from './reorder';
@@ -92,7 +92,7 @@ import { rng } from './random';
 import { hallCap } from './hall';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { badBatch, SUPPLIER_IDS, SUPPLIERS, supplierOpen, listPrice, priceFor } from './suppliers';
-import { buyUpgrade, carryOf, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, type UpgradeId, MARKDOWN_EVENING } from './upgrades';
+import { buyUpgrade, carryOf, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, staffCarry, UPGRADES, type UpgradeId, MARKDOWN_EVENING } from './upgrades';
 import { CARRY, homemade } from './economy';
 import { fairToday, fairTodayTolerance, STALL_MAX, stallSale } from './fair';
 import { endSale, SALE_CROWD, saleExtraItems, startSale, weekFor } from './weeks';
@@ -126,13 +126,14 @@ import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, next
 import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
 import { carryBonus, eyeTheft } from './owner';
-import { buyStand, ITEM_COST, RENTAL_CAP, rentalOf, restockRental, STAND_COST } from './rental';
+import { buyStand, STAND_COST } from './rental';
 import { buyFloor, finishCost, finishFloor, floorAvailable, FLOORS, hasFloor } from './floors';
 import { basementOf, buyPart, buySlot, PARTS, SLOT_COST, slotPlaces } from './basement';
-import { batchCost, buyBatch, clothesOf, freePlaces, setClerk, setSale } from './clothes';
-import { answerInspection, answerParty, inspectionToday, openStall, ownAllowed, partyToday, setStallMode, stallLock, stallMode, stallPlaces, stallsOf, STALL_IDS, STALLS } from './foodcourt';
-import { serveCapacity, smallBasket } from './traffic';
-import { buyVan, loadVan, planTrip, vanEvents, vanFuel, vanOpen, vanPrice, vanWant, VAN_EVENTS, VAN_PRICE } from './van';
+import { clothesMorning, clothesOf, freePlaces, setClerk } from './clothes';
+import { answerParty, openStall, partyToday, stallLock, stallPlaces, stallsOf, STALL_IDS, STALLS } from './foodcourt';
+import { autoCapacity, CREDIT_MAX, QUICK_PATIENCE, quickPick, serveCapacity, smallBasket } from './traffic';
+import { levelPace, loaderPace, shelfToFill, tripSeconds } from './loader';
+import { buyVan, vanOpen, VAN_PRICE } from './van';
 
 export { rng };
 
@@ -147,6 +148,12 @@ export interface SimDay {
   wanted: number;
   served: number;
   lost: number;
+  /** Из обслуженных - гости «на бегу» (traffic.ts, только с hall): зал полон, пробили кассы без хозяина. */
+  quick: number;
+  /** Ушли ни с чем у пустой полки (в зале и «на бегу»). */
+  empty: number;
+  /** Ходки со склада на полки за день: грузчик и ученик (loader.ts), а без грузчика - хозяин. */
+  trips: number;
   revenue: number;
   purchases: number;
   investments: number;
@@ -244,8 +251,11 @@ export interface SimOptions {
    */
   zar?: { from: number; every: number; cap?: number };
   /**
-   * Предел зала (hall.ts): гостей за день не больше, чем зал пропускает. 22.11 — замер для «Трафика v2»;
-   * по умолчанию выключен, пока баланс не пересчитан.
+   * «Трафик v2» (hall.ts, traffic.ts): зал пропускает за день hallCap гостей, остальные берут своё «на бегу» (1-2 товара,
+   * пустая полка - похожее) и идут к кассам без хозяина - сменщик, кассиры, киоски (autoCapacity); кому не хватило
+   * касс - уходят. Без таких касс лишние проходят мимо. Ночью потока нет - ночных гостей тоже держит зал.
+   * Закупка - на тех, кого пробьют (зал + кассы без хозяина), а не на всех позванных.
+   * По умолчанию выключен: на прогонах без предела зала откалиброваны проверки баланса (tests/balance*).
    */
   hall?: boolean;
   /** Каждое утро до решений игрока — посмотреть состояние (scripts/decisions.ts считает, что видит игрок). */
@@ -282,16 +292,16 @@ export type Feature =
   // Арендаторы флигеля (tenants.ts): сдаёт комнаты (самые выгодные — первыми), отделывает второй раз, зовёт сезонного
   // торговца и носит арендаторам, что просят.
   | 'tenants'
-  // Бабушкин двор (garden.ts): ставит теплицу, докапывает грядки, сажает «яблоки и картошку» и собирает урожай
-  // каждое утро — прямо на овощной прилавок.
+  // Бабушкин двор (garden.ts): ставит теплицу и докапывает грядки; деньги каждый вечер приходят сами (nightCycle),
+  // как в игре (27.11: раньше собирал урожай по часам на прилавок каждое утро - двор выходил в ~10 раз богаче живого).
   | 'garden'
   // Лицензия на пиво и сигареты (license.ts): покупает, когда есть запас и не копит на расширение. Подросткам
   // не продаёт (особых гостей симулятор не водит) — нарушений нет, проверки проходят чисто.
   | 'license'
   // Ломбард (pawnshop.ts): берёт вещь у гостя со спокойной приметой, если в кассе с запасом; суетливым отказывает.
   | 'pawn'
-  // Прокат у входа (rental.ts, 13.11): ставит стойку, когда не копит на помещение, и каждое утро докупает пропавшее;
-  // залог — средний (по умолчанию).
+  // Прокат у входа (rental.ts, 13.11): ставит стойку, когда не копит на помещение; дальше она работает сама (27.11:
+  // без залога и докупки, стойка растёт с магазином).
   | 'rental'
   // Лотерея у кассы (lottery.ts): ставит стойку, когда есть запас; тираж и запреты — в nightCycle, как в игре.
   | 'lottery'
@@ -315,8 +325,8 @@ export type Feature =
   // Без этой механики престиж в прогоне не копится: на прежних прогонах откалиброван баланс (аренда и прайс — как были).
   | 'gentrify'
   // Фудкорт на третьем этаже (floors.ts, foodcourt.ts, 13.11): открывает этаж, когда не копит на помещение, точки —
-  // по одной, своей точку ведёт, только если повар на смене (иначе сдаёт); ремонт — когда места кончились. Праздник
-  // берёт, если товар есть; на жалобу — наводит порядок. Третий стоит на втором: без него сначала открывает второй.
+  // по одной (ведёт их кто выгоднее — как в игре), ремонт — когда места кончились. Праздник берёт, если товар есть;
+  // жалоба закрывает точку на вечер сама. Третий стоит на втором: без него сначала открывает второй.
   | 'foodcourt'
   // Улица (estate.ts, 13.11): помещения на задней улице из лишних денег — после района (с features.hood), арендатор —
   // кто платит больше всех.
@@ -328,9 +338,6 @@ const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy
 const SHELF_PRIORITY_DEPTS: Category[] = ['dairy', 'meat', 'drinks', 'produce', 'frozen', 'bakery', 'household', 'dairy', 'produce', 'meat', 'drinks', 'frozen', 'bakery', 'household', 'dairy', 'produce', 'meat'];
 
 const AVG_WANTS = 1.5;
-/** Двор в симуляторе: игрок заходит раз в день, утром; время двора — по игровым дням. */
-const DAY_MS = 86_400_000;
-const SIM_CROP: CropId = 'mix';
 /** Сколько штук каждого товара держит новичок (buyMode: 'naive'). */
 const NAIVE_STOCK = 8;
 
@@ -809,26 +816,19 @@ export function simulate({
 
     // ---------- Утро: двор и флигель ----------
     if (features.garden) {
-      const now = state.day * DAY_MS;
-      const built = buildGarden(state, now);
+      const built = buildGarden(state);
       if (built) {
         state = built;
         investments += GARDEN_PRICE;
       }
       const bedCost = nextBedCost(state);
       if (bedCost !== null && state.money >= bedCost * 2 + reserve && canSplurge(bedCost)) {
-        const dug = addBed(state, now);
+        const dug = addBed(state);
         if (dug) {
           state = dug;
           investments += bedCost;
         }
       }
-      // Новая грядка вскопана под картошку — пересаживает под «яблоки и картошку» (за один заход в день с неё больше всего,
-      // а два вида делят прилавок).
-      bedsOf(state).forEach((bed, i) => {
-        if (bed.crop !== SIM_CROP) state = plant(state, i, SIM_CROP, now) ?? state;
-      });
-      state = harvest(state, now)?.state ?? state;
     }
     if (features.tenants) {
       const best = [...TENANT_IDS].sort((a, b) => TENANTS[b].rent / TENANTS[b].setup - TENANTS[a].rent / TENANTS[a].setup);
@@ -882,9 +882,9 @@ export function simulate({
       };
       if (floorAvailable(state, 'second')) spend(FLOORS.second.cost, buyFloor(state, 'second'));
       if (clothesOf(state)) {
-        state = setSale(state, true) ?? state;
         if (state.level >= 4) state = setClerk(state, true) ?? state;
-        for (let k = 0; k < 6 && freePlaces(state) > 0 && state.money >= batchCost(state) + reserve; k++) state = buyBatch(state) ?? state;
+        // 27.11: стойки пополняются сами каждое утро (как в игре — тот же завоз и тот же запас под счета); распродажа — сама.
+        state = clothesMorning(state);
         const fin = finishCost(state, 'second');
         if (fin !== null && !freePlaces(state)) spend(fin, finishFloor(state, 'second'));
       }
@@ -899,15 +899,15 @@ export function simulate({
       if (floorAvailable(state, 'second')) spend(FLOORS.second.cost, buyFloor(state, 'second'));
       if (floorAvailable(state, 'third')) spend(FLOORS.third.cost, buyFloor(state, 'third'));
       if (hasFloor(state, 'third')) {
-        const mode = ownAllowed(state) && staffOf(state, 'cook') ? 'own' : 'rent';
+        // 27.11: кто ведёт точку, решает игра (с Кухней — своя), жалоба закрывает точку на вечер сама.
         const next = STALL_IDS.find((id) => stallLock(state, id) === null);
         const fin = finishCost(state, 'third');
-        if (next) spend(STALLS[next].setup, openStall(state, next, mode));
+        if (next) spend(STALLS[next].setup, openStall(state, next));
         else if (fin !== null && stallsOf(state).length >= stallPlaces(state)) spend(fin, finishFloor(state, 'third'));
-        for (const id of stallsOf(state)) if (stallMode(state, id) !== mode) state = setStallMode(state, id, mode) ?? state;
         if (partyToday(state)?.ready) state = answerParty(state, true) ?? state;
-        if (inspectionToday(state)) state = answerInspection(state, true) ?? answerInspection(state, false) ?? state;
       }
+      // Второй этаж открыт ради фудкорта: в игре стойки всё равно заполняются сами (ui/floors.ts, ui/morning.ts fillRacks).
+      state = clothesMorning(state);
     }
     if (features.rental) {
       if (!state.rental && state.money >= STAND_COST * 2 + reserve && canSplurge(STAND_COST)) {
@@ -917,8 +917,6 @@ export function simulate({
           investments += STAND_COST;
         }
       }
-      const missing = RENTAL_CAP - (rentalOf(state)?.stock ?? RENTAL_CAP);
-      if (missing && state.money >= missing * ITEM_COST + reserve) state = restockRental(state, missing) ?? state;
     }
 
     // ---------- Утро: закупка ----------
@@ -967,15 +965,19 @@ export function simulate({
       state = early.state;
       purchases += early.spent;
     }
+    // Закупка - на всех позванных, как кнопки игры «Закупать сам» и «Закупить нужное» (ui/morning.ts guestsToday).
+    // 27.11: пробовали «на тех, кого пробьют» (зал + кассы без хозяина) - на цифры почти не влияет, а такого правила
+    // в игре нет; банкротства «базового» игрока были от того, что не было потока «на бегу», а не от закупки.
+    const buyFor = guestsToday(state);
     if (buyMode === 'auto' && autoActive(state)) {
       // «Закупать сам»: тот же расчёт и те же цены, что у кнопки, только без брака.
       const before = state.money;
-      state = autoMorning(state, priceOf, guestsToday(state));
+      state = autoMorning(state, priceOf, buyFor);
       purchases += before - state.money;
     } else if (buyMode === 'restock' || buyMode === 'auto') {
       // Одно нажатие: купленное сразу встаёт на полки, лишнее — на склад (buyLine).
       // Печь в симуляторе печёт до закупки: её хлеб уже в запасе, вычитать его из плана второй раз не нужно.
-      const plan = restockPlan(state, priceOf, guestsToday(state), [], 0);
+      const plan = restockPlan(state, priceOf, buyFor, [], 0);
       for (const line of plan.lines) {
         const before = state.money;
         const got = buyLine(state, line, badBatch(line.sid, state.day, random()));
@@ -1057,30 +1059,11 @@ export function simulate({
         purchases += qty * best!.price;
       }
     }
-    // Выездная торговля (van.ts): фургон — когда на него есть лишние деньги; в день события — самое выгодное
-    // из событий дня, под него докупает сколько там обычно разбирают (у самого дешёвого поставщика) и грузит.
-    if (features.van) {
-      if (!state.van && vanOpen(state) && state.money >= VAN_PRICE * 2 + reserve && canSplurge(VAN_PRICE)) {
-        state = buyVan(state) ?? state;
-        investments += VAN_PRICE;
-      }
-      const best = vanEvents(state)
-        .map((id) => ({ id, gain: (Object.keys(VAN_EVENTS[id].wants) as ProductId[]).reduce((sum, p) => sum + (canStock(state, p) ? vanWant(state, id, p) * vanPrice(p, id) : 0), 0) - vanFuel(state, id) }))
-        .sort((a, b) => b.gain - a.gain)[0];
-      const planned = state.van && best ? planTrip(state, best.id) : null;
-      if (planned && best) {
-        state = planned;
-        for (const p of (Object.keys(VAN_EVENTS[best.id].wants) as ProductId[]).filter((x) => canStock(state, x))) {
-          const offers = SUPPLIER_IDS.map((sid) => priceOf(sid, p)).filter((x): x is number => x !== null);
-          const price = Math.min(...offers);
-          const qty = Math.min(vanWant(state, best.id, p), Math.floor((state.money - reserve) / price), warehouseCapacity(state) - warehouseCount(state));
-          if (!offers.length || qty <= 0) continue;
-          const bought = buyStock(state, p, qty, price);
-          if (!bought) continue;
-          purchases += state.money - bought.money;
-          state = loadVan(bought, p, qty) ?? bought;
-        }
-      }
+    // Выездная торговля (van.ts): фургон — когда на него есть лишние деньги. 27.11: дальше он ездит сам — в день
+    // события на самое выгодное, груз берёт у поставщика сам, мимо полок и склада; итог зачисляет ночь (settleVan).
+    if (features.van && !state.van && vanOpen(state) && state.money >= VAN_PRICE * 2 + reserve && canSplurge(VAN_PRICE)) {
+      state = buyVan(state) ?? state;
+      investments += VAN_PRICE;
     }
     // Кафе по соседству забирает заказ, как только магазин открылся.
     const cafeRes = cafeDeliver(state);
@@ -1098,11 +1081,28 @@ export function simulate({
     // Оплата кафе — тоже выручка дня (деньги уже зачислены при отгрузке).
     stats.revenue += cafeIncome;
     const wantedGuests = Math.max(0, Math.round(guests * (0.85 + random() * 0.3)));
-    const dayGuests = hall ? Math.min(wantedGuests, hallCap(state)) : wantedGuests;
+    // «Трафик v2»: в зал - сколько он пропускает, остальные «на бегу» к кассам без хозяина (если такие кассы есть).
+    const autoCap = hall ? autoCapacity(state) : 0;
+    const hallGuests = hall ? Math.min(wantedGuests, hallCap(state)) : wantedGuests;
+    const quickGuests = autoCap > 0 ? wantedGuests - hallGuests : 0;
+    const dayGuests = hallGuests + quickGuests;
     // Один игрок не успевает всё: чем больше магазин, тем больше теряется без персонала.
     const has = (r: StaffRole) => Boolean(staffOf(state, r));
-    // Ученик на складе (apprentice.ts) сам носит коробки на полки — как грузчик на полставки.
-    let trips = (tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level) + Math.round(apprStockPace(state) * 6);
+    // Хозяин без грузчика носит со склада сам, когда заметит пустую полку: столько ходок за день. Без предела зала -
+    // по-старому (на этом откалиброваны проверки баланса, tests/balance*, и цифры docs/BALANCE.md): грузчик - 60 таких
+    // ходок, ученик на складе (apprentice.ts) - ещё несколько.
+    let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? (hall ? 0 : 60) : 3 + state.level;
+    if (!hall) trips += Math.round(apprStockPace(state) * 6);
+    // «Трафик v2»: грузчик и ученик на складе носят по времени, как в сцене (loader.ts): ходка - путь по залу помещения,
+    // делённый на их скорость; несут тележку сотрудника (staffCarry) на самую пустую полку. 27.11: раньше и здесь стояло
+    // «60 ходок за день», а в сцене грузчик успевал 9-25, - симулятор не видел, что полки пустеют.
+    const loaderM = hall ? staffOf(state, 'loader') : undefined;
+    const stockRate = hall ? ((loaderM ? loaderPace(state, loaderM) : 0) + apprStockPace(state) * levelPace(state)) / tripSeconds(state) : 0;
+    // Ночью ученик уходит домой (apprentice.ts stockLoop), носит только грузчик.
+    const nightStockRate = hall && loaderM ? loaderPace(state, loaderM) / tripSeconds(state) : 0;
+    let stockClock = 0;
+    let staffTrips = 0;
+    let ownerTrips = 0;
     // С котом и радио в очереди ждут дольше — уходят реже. Климат, указатели, тележки и обаяние хозяина
     // убраны 02.11: из шести «терпений» остались два, что игрок замечает (docs/BALANCE.md).
     const lossInQueue = (queueLoss ?? (hasCashier(state) ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / radioPatience(state) / apprPatience(state);
@@ -1173,23 +1173,32 @@ export function simulate({
       stats.dishes = (stats.dishes ?? 0) + 1;
       return DISHES[dish.dish].price;
     };
-    const runGuests = (count: number, tolerance: number, cap: number, night: boolean) => {
-    for (let g = 0; g < count; g++) {
-      if (!noThieves(state) && random() < thiefChance(state.level) * cameraTheft(state) * eyeTheft(state)) {
-        // Вор берёт товар; его ловит охранник или, реже, сам игрок — по повадкам (thiefTells.ts), за награду.
-        const id = sellable[Math.floor(random() * sellable.length)];
-        const index = shelfFor(state, id);
-        const taken = index >= 0 ? takeFromShelf(state, index, id) : null;
-        if (!taken) continue;
-        const caught = random() < (guard ? guardCatchChance(guard) : ownerCatch(state));
-        state = caught ? returnToShelf(taken.state, [{ id, unit: taken.unit }]) : taken.state;
-        // Награду за пойманного (thiefTells.ts OWNER_BOUNTY) симулятор не начисляет (13.11): это мелочь — десятки
-        // 💰 в день против тысяч выручки, — а лишние монеты сдвигают пороги покупок, и пороговые проверки
-        // баланса (tests/weeks, tests/balanceZar) уезжают от шума, а не от игры. Важное — доля пойманных — учтено.
-        if (caught) stats.caught++;
-        else stats.stolen += unitSalePrice(state, id, taken.unit);
-        continue;
+    // Время дня (секунды) - для ходок со склада и касс «на бегу».
+    let clock = 0;
+    let hallServed = 0;
+    let quickServed = 0;
+    // Гостей зала у кассиров, сменщика и киосков - эта доля: их время касс уходит и на поток «на бегу».
+    const autoShare = autoCap > 0 ? autoCap / (autoCap + capacity.owner) : 0;
+    /** Прошло dt секунд: грузчик и ученик сделали свои ходки (несут на самую пустую полку, где есть что положить). */
+    const stockTick = (dt: number, night: boolean) => {
+      clock += dt;
+      const rate = night ? nightStockRate : stockRate;
+      if (rate <= 0) return;
+      stockClock += rate * dt;
+      while (stockClock >= 1) {
+        const index = shelfToFill(state);
+        // Нести нечего - ждут у склада: впрок ходки не копятся, следующая начнётся, когда понадобится.
+        if (index < 0) {
+          stockClock = 0;
+          break;
+        }
+        state = moveToShelf(state, index, undefined, staffCarry(state)).state;
+        stockClock--;
+        staffTrips++;
       }
+    };
+    /** Автозаказ подвозит кончившееся, хозяин без грузчика сам несёт на пустую полку. */
+    const beforeGuest = (night: boolean) => {
       // Автозаказ днём: разобрали, а на складе пусто — подвоз (фургон в симуляции приезжает сразу).
       if (!night && autoActive(state)) {
         const top = autoTopUp(state, (id) => stats.sold[id] ?? 0);
@@ -1204,8 +1213,69 @@ export function simulate({
           const index = shelfFor(state, id);
           state = moveToShelf(state, index, undefined, carryOf(state) + (has('loader') ? 0 : carryBonus(state))).state;
           trips--;
+          ownerTrips++;
         }
       }
+    };
+    /**
+     * Гость «на бегу» (traffic.ts quickPick, как в сцене trafficFx.arrive): 1-2 товара с полок, нет нужного - похожее;
+     * платит у касс без хозяина. Они пробивают поток в своё время: к этой минуте дня - не больше autoCap × прошедшая
+     * доля (часть уходит на гостей зала у кассиров и киосков) и очередь на терпение гостя; не хватило - оставил корзину.
+     */
+    const runQuick = () => {
+      beforeGuest(false);
+      const aroma = random() < aromaShare;
+      const want = pickWanted(state, random, (random() < 0.5 ? 2 : 1) + crisisExtraItems(state) + adExtraItems(state, extraRandom) + saleExtraItems(state, extraRandom), (p) => dayDemand(state, p, aroma));
+      const pick = quickPick(state, want, random);
+      state = pick.state;
+      if (!pick.cart.length) {
+        if (pick.why) {
+          stats.lost++;
+          noteLost(stats, pick.why, pick.id);
+        }
+        return;
+      }
+      if (quickServed + hallServed * autoShare >= (autoCap * (clock + QUICK_PATIENCE)) / DAY_SECONDS + CREDIT_MAX) {
+        state = returnToShelf(state, pick.cart);
+        stats.lost++;
+        noteLost(stats, 'queue');
+        stats.quickQueue = (stats.quickQueue ?? 0) + 1;
+        return;
+      }
+      const paid = checkout(state, pick.cart);
+      state = paid.state;
+      stats.revenue += paid.total;
+      stats.served++;
+      stats.quick = (stats.quick ?? 0) + 1;
+      quickServed++;
+      recordSale(stats, pick.cart);
+    };
+    // Гости части дня (seconds - сколько она длится): count - в зал, quick - «на бегу», вперемешку ровно по времени.
+    const runGuests = (count: number, tolerance: number, cap: number, night: boolean, seconds: number, quick = 0) => {
+    const total = count + quick;
+    if (!total) stockTick(seconds, night);
+    for (let g = 0; g < total; g++) {
+      stockTick(seconds / total, night);
+      if (quick > 0 && Math.floor(((g + 1) * quick) / total) > Math.floor((g * quick) / total)) {
+        runQuick();
+        continue;
+      }
+      if (!noThieves(state) && random() < thiefChance(state.level) * cameraTheft(state) * eyeTheft(state)) {
+        // Вор берёт товар; его ловит охранник или, реже, сам игрок - по повадкам (thiefTells.ts), за награду.
+        const id = sellable[Math.floor(random() * sellable.length)];
+        const index = shelfFor(state, id);
+        const taken = index >= 0 ? takeFromShelf(state, index, id) : null;
+        if (!taken) continue;
+        const caught = random() < (guard ? guardCatchChance(guard) : ownerCatch(state));
+        state = caught ? returnToShelf(taken.state, [{ id, unit: taken.unit }]) : taken.state;
+        // Награду за пойманного (thiefTells.ts OWNER_BOUNTY) симулятор не начисляет (13.11): это мелочь - десятки
+        // 💰 в день против тысяч выручки, - а лишние монеты сдвигают пороги покупок, и пороговые проверки
+        // баланса (tests/weeks, tests/balanceZar) уезжают от шума, а не от игры. Важное - доля пойманных - учтено.
+        if (caught) stats.caught++;
+        else stats.stolen += unitSalePrice(state, id, taken.unit);
+        continue;
+      }
+      beforeGuest(night);
       const aroma = random() < aromaShare;
       const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + crisisExtraItems(state) + adExtraItems(state, extraRandom) + saleExtraItems(state, extraRandom), (p) => dayDemand(state, p, aroma));
       const fair = (p: ProductId) =>
@@ -1265,6 +1335,7 @@ export function simulate({
       stats.revenue += paid.total + extra + dish;
       if (night) nightRevenue += paid.total + extra + dish;
       stats.served++;
+      if (!night) hallServed++;
       recordSale(stats, cart);
       if (hasUnmarkedBad(cart) && random() < BAD_COMPLAINT_CHANCE) stats.complaints++;
       if (random() < dirtComplaint) stats.complaints++;
@@ -1292,26 +1363,33 @@ export function simulate({
         cookRounds--;
       }
     };
-    // Гости части дня (от доли start, длиной share): с поваром — по четвертям, между ними он готовит.
-    const dayPart = (count: number, start: number, share: number) => {
+    // Гости части дня (от доли start, длиной share; quick из них - «на бегу»): с поваром - по четвертям, между ними он готовит.
+    const dayPart = (count: number, quick: number, start: number, share: number) => {
       const parts = chef ? Math.max(1, Math.round(share * 4)) : 1;
       let done = 0;
+      let doneQuick = 0;
       for (let i = 0; i < parts; i++) {
         if (chef) cookFor(1 - start - (share * i) / parts);
         const n = Math.round((count * (i + 1)) / parts) - done;
-        runGuests(n, 1, serveCap, false);
+        const q = Math.round((quick * (i + 1)) / parts) - doneQuick;
+        runGuests(n, 1, serveCap, false, (share * DAY_SECONDS) / parts, q);
         done += n;
+        doneQuick += q;
       }
     };
     // Вечер «Ночи распродаж» (weeks.ts): последняя четверть дня — всё на 20% дешевле, гостей больше.
     const sale = weekFor(state.day)?.id === 'sale';
     {
       // Вечерняя уценка (у всех с 02.11): к вечеру то, что испортится ночью, уценяется само (вечер тот же, что у распродажи, — SALE_EVENING).
-      const evening = Math.round(dayGuests * MARKDOWN_EVENING);
-      dayPart(dayGuests - evening, 0, 1 - MARKDOWN_EVENING);
+      const evening = Math.round(hallGuests * MARKDOWN_EVENING);
+      const eveningQuick = Math.round(quickGuests * MARKDOWN_EVENING);
+      dayPart(hallGuests - evening, quickGuests - eveningQuick, 0, 1 - MARKDOWN_EVENING);
       state = markdownSurplus(state, (id) => eveningSales(stats.sold[id] ?? 0)).state;
       if (sale) state = startSale(state);
-      dayPart(sale ? Math.round(evening * SALE_CROWD) : evening, 1 - MARKDOWN_EVENING, MARKDOWN_EVENING);
+      // Распродажа зовёт больше гостей; с пределом зала лишние идут «на бегу» (или мимо, если касс без хозяина нет).
+      const crowd = sale ? Math.round(evening * SALE_CROWD) : evening;
+      const inHall = hall ? Math.min(crowd, Math.max(evening, Math.round(hallCap(state) * MARKDOWN_EVENING))) : crowd;
+      dayPart(inHall, eveningQuick + (autoCap > 0 ? crowd - inHall : 0), 1 - MARKDOWN_EVENING, MARKDOWN_EVENING);
     }
     // Ночная смена: гостей меньше, к ценам терпимее, касса успевает пропорционально времени.
     let nightProfit = 0;
@@ -1322,8 +1400,10 @@ export function simulate({
       if (paid) {
         state = paid;
         const before = stats.served;
-        const nightGuests = Math.round(((guests * NIGHT_SECONDS) / DAY_SECONDS) * NIGHT_GUESTS * (0.85 + random() * 0.3));
-        runGuests(nightGuests, NIGHT_TOLERANCE, before + Math.floor((serveCap * NIGHT_SECONDS) / DAY_SECONDS), true);
+        const called = Math.round(((guests * NIGHT_SECONDS) / DAY_SECONDS) * NIGHT_GUESTS * (0.85 + random() * 0.3));
+        // Ночью потока «на бегу» нет (trafficFx.arrive): гостей держит зал.
+        const nightGuests = hall ? Math.min(called, Math.round((hallCap(state) * NIGHT_SECONDS) / DAY_SECONDS)) : called;
+        runGuests(nightGuests, NIGHT_TOLERANCE, before + Math.floor((serveCap * NIGHT_SECONDS) / DAY_SECONDS), true, NIGHT_SECONDS);
         // Ночная история (nightGuests.ts): соглашается; товар студенту в долг — как продажа в минус.
         const story = nightStory(extraRandom);
         if (story) {
@@ -1391,6 +1471,9 @@ export function simulate({
       wanted: wantedGuests,
       served: stats.served,
       lost: stats.lost,
+      quick: stats.quick ?? 0,
+      empty: stats.lostWhy?.empty ?? 0,
+      trips: staffTrips + ownerTrips,
       revenue: stats.revenue,
       purchases,
       investments,

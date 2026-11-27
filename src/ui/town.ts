@@ -1,9 +1,8 @@
 // «Район» в утре (game/town.ts, platform/town.ts): общая цель недели с полоской и наградой, «Магазин дня» с кнопкой
-// «В гости»; и то, что пришло от района само, — чаевые от гостей, оставивших отметку, и полив теплицы от друзей.
+// «В гости»; и то, что пришло от района само, — чаевые от гостей, оставивших отметку.
 
 import { t } from '../i18n';
 import { STORE_LEVELS, type StoreState } from '../game/economy';
-import { water, WATER_MS } from '../game/garden';
 import { claimGoal, goalReward, takeLikes } from '../game/town';
 import { homeLevel } from '../game/zarshop';
 import { track } from '../platform/analytics';
@@ -14,28 +13,16 @@ type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') 
 const money = (n: number) => n.toLocaleString('ru-RU');
 
 /**
- * Что пришло от района, пока игрока не было: гости магазина оставили отметки (и чаевые), друзья полили теплицу.
+ * Что пришло от района, пока игрока не было: гости магазина оставили отметки (и чаевые).
  * Забирается один раз (сервер уже списал) — зовём, когда утро открылось и когда пришли данные.
  */
 export function applyTownGifts(getState: () => StoreState, update: Update): void {
-  const { likes, waters } = takeTownGifts();
-  let state = getState();
-  let changed = false;
-  const liked = likes ? takeLikes(state, likes) : null;
-  if (liked) {
-    state = liked.state;
-    changed = true;
-    track('town_likes', state.day, likes);
-    toast('assets/ico_shop.png', t('town.likes.title'), t('town.likes.text', { n: likes, sum: money(liked.money) }));
-  }
-  const wet = waters ? water(state, Date.now(), waters) : null;
-  if (wet) {
-    state = wet;
-    changed = true;
-    track('town_water', state.day, waters);
-    toast('assets/ico_shop.png', t('garden.title'), t('town.watered', { n: Math.round((waters * WATER_MS) / 3600_000) }));
-  }
-  if (changed) update(state, 'success');
+  const { likes } = takeTownGifts();
+  const liked = likes ? takeLikes(getState(), likes) : null;
+  if (!liked) return;
+  track('town_likes', liked.state.day, likes);
+  toast('assets/ico_shop.png', t('town.likes.title'), t('town.likes.text', { n: likes, sum: money(liked.money) }));
+  update(liked.state, 'success');
 }
 
 /** Карточка района: цель недели и магазин дня. Сервера нет (не Telegram) — карточки нет. */

@@ -6,14 +6,14 @@ import { weekOf as serverWeek } from '../api/_lib/week';
 import type { D1, D1Statement, Env } from '../api/_lib/telegram';
 import { newGame, type StoreState } from '../src/game/economy';
 import { claimGoal, GOAL_BASE, GOAL_NEIGHBOURS, GOAL_PER_SHOP, goalNeighbours, goalReward, LIKES_MAX, likeTip, takeLikes, townFlags, weekOf } from '../src/game/town';
-import { friendState, GUEST_GARDEN, shopSnapshot } from '../src/game/friendShop';
-import { bedsOf, gardenRipe } from '../src/game/garden';
+import { friendState, shopSnapshot } from '../src/game/friendShop';
+import { bedCount } from '../src/game/garden';
 import { tenantsOf, tenantTier } from '../src/game/tenants';
 import { comebackHooks } from '../src/game/comeback';
 import { pickReminder, TEXTS, type Player } from '../api/_lib/remind';
 import { DEFAULT_EVENTS } from '../src/game/live';
 
-// Район (town.ts): общая цель недели, «Магазин дня» с отметкой, полив теплицы другу, напоминание про урожай.
+// Район (town.ts): общая цель недели, «Магазин дня» с отметкой. Полив теплицы другу и напоминание про урожай убраны 27.11.
 
 const DAY = 24 * 3600_000;
 
@@ -51,48 +51,37 @@ describe('район: правила игры', () => {
     expect(takeLikes(shop(), 500)!.money).toBe(LIKES_MAX * likeTip(2));
   });
 
-  it('в снимке магазина — арендаторы и грядки; у гостя грядки всегда в росте', () => {
-    const state = shop({ level: 5, tenants: ['toys', 'barber'], tenantUp: { toys: 1 }, garden: { since: 1, harvests: 4, more: [{ crop: 'apples', since: 1 }] } });
+  it('в снимке магазина — арендаторы и грядки; у гостя столько же грядок', () => {
+    const state = shop({ level: 5, tenants: ['toys', 'barber'], tenantUp: { toys: 1 }, garden: { beds: 2 } });
     const snap = shopSnapshot(state);
     expect(snap.tenants).toEqual(['toys+', 'barber']);
+    // Формат снимка прежний (культуры по грядкам): его читают и друзья со старой игрой.
     expect(snap.beds).toEqual(['mix', 'apples']);
     const guest = friendState(JSON.parse(JSON.stringify(snap)), shop())!;
     expect(tenantsOf(guest)).toEqual(['toys', 'barber']);
     expect(tenantTier(guest, 'toys')).toBe(2);
     expect(tenantTier(guest, 'barber')).toBe(1);
-    expect(bedsOf(guest)).toEqual([{ crop: 'mix', since: GUEST_GARDEN }, { crop: 'apples', since: GUEST_GARDEN }]);
-    expect(gardenRipe(guest, Date.now())).toBe(false);
-    // Чужой мусор в снимке не проходит.
+    expect(guest.garden).toEqual({ beds: 2 });
+    // Снимок от старой игры (грядки старого вида) и чужой мусор: считаем только известные культуры.
+    expect(shopSnapshot(shop({ garden: { since: 1, harvests: 4, more: [{ crop: 'apples', since: 1 }, { crop: 'quick', since: 1 }] } })).beds).toEqual(['mix', 'apples', 'quick']);
     const junk = friendState({ ...snap, tenants: ['casino', 'atm+', 7], beds: ['weed', 'quick'] }, shop())!;
     expect(tenantsOf(junk)).toEqual(['atm']);
-    expect(bedsOf(junk)).toEqual([{ crop: 'quick', since: GUEST_GARDEN }]);
+    expect(bedCount(junk)).toBe(1);
   });
 });
 
-describe('район: бот напоминает про урожай', () => {
+describe('район: бот про урожай больше не пишет (27.11, двор приносит деньги сам)', () => {
   const now = Date.UTC(2026, 10, 10, 9, 0, 0);
   const player = (over: Partial<Player> = {}): Player => ({ id: 1, lang: 'ru', tz: 180, sonya: 0, spoil: 0, streak: 0, gift: '', cashier: 0, day: 12, reason: null, helper: null, ...over });
 
-  it('игра сообщает, когда поспеет ближайшая грядка', () => {
-    const state = { ...newGame(), day: 5, garden: { since: now, harvests: 0, more: [{ crop: 'quick' as const, since: now }] } };
-    expect(comebackHooks(state).ripe).toBe(Math.round((now + 2 * 3600_000) / 1000));
-    expect(comebackHooks(newGame()).ripe).toBe(0);
-  });
-
-  it('урожай созрел — бабушка зовёт собрать; ещё растёт или двора нет — молчит', () => {
-    const ripe = pickReminder(player({ ripe: Math.round(now / 1000) - 60 }), now, DEFAULT_EVENTS);
-    expect(ripe.reason).toBe('garden');
-    expect(ripe.text).toBe(TEXTS.ru.garden);
-    expect(pickReminder(player({ ripe: Math.round(now / 1000) + 3600 }), now, DEFAULT_EVENTS).reason).not.toBe('garden');
-    expect(pickReminder(player({ ripe: 0 }), now, DEFAULT_EVENTS).reason).not.toBe('garden');
-    // В прошлый раз писали про урожай — теперь о другом, а урожай — припиской «Ещё ждут».
-    const again = pickReminder(player({ ripe: Math.round(now / 1000) - 60, reason: 'garden' }), now, DEFAULT_EVENTS);
-    expect(again.reason).not.toBe('garden');
-    expect(again.text).toContain(TEXTS.ru['also.garden']);
-    for (const lang of Object.keys(TEXTS) as (keyof typeof TEXTS)[]) {
-      expect(TEXTS[lang].garden, lang).toBeTruthy();
-      expect(TEXTS[lang]['also.garden'], lang).toBeTruthy();
-    }
+  it('игра не шлёт, когда поспеет грядка; старое поле ripe и прошлый повод garden ничего не ломают', () => {
+    const state = { ...newGame(), day: 5, garden: { since: now, harvests: 0, more: [{ crop: 'quick', since: now }] } };
+    expect('ripe' in comebackHooks(state)).toBe(false);
+    const old = { ...player({ reason: 'garden' }), ripe: Math.round(now / 1000) - 60 } as Player;
+    const r = pickReminder(old, now, DEFAULT_EVENTS);
+    expect(r.reason).not.toBe('garden');
+    expect(r.text).not.toContain('урожай');
+    for (const lang of Object.keys(TEXTS) as (keyof typeof TEXTS)[]) expect(Object.keys(TEXTS[lang]).filter((k) => k.includes('garden')), lang).toEqual([]);
   });
 });
 
@@ -136,7 +125,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-type Day = { enabled: boolean; shop: { id: number; name: string; shop?: string } | null; liked: boolean; likes: number; waters: number; goal: { week: number; total: number; target: number; left: number; mine: boolean }; last?: { week: number } };
+type Day = { enabled: boolean; shop: { id: number; name: string; shop?: string } | null; liked: boolean; likes: number; waters?: number; goal: { week: number; total: number; target: number; left: number; mine: boolean }; last?: { week: number } };
 
 describe.skipIf(!Database)('район (сервер)', () => {
   const play = async (env: Env, id: number, extra: Record<string, unknown> = {}) =>
@@ -181,18 +170,15 @@ describe.skipIf(!Database)('район (сервер)', () => {
     expect(await json<{ enabled: boolean }>(town(await post(1, { action: 'day' }), {}))).toEqual({ enabled: false });
   });
 
-  it('полить теплицу можно только другу и раз в день; поливы отдаются тому, у кого теплица, один раз', async () => {
+  it('полива больше нет: старая игра просит полить — ничего не пишем, в ответе дня поливов нет', async () => {
     const env: Env = { BOT_TOKEN: TOKEN, DB: d1() };
     await socialPing(await post(1), env);
     await recordReferral(env, 2, 'ref_1');
     for (const id of [1, 2, 3]) await play(env, id);
-    expect(await json<{ ok: boolean }>(town(await post(1, { action: 'water', to: 3 }), env))).toEqual({ ok: false });
-    expect(await json<{ ok: boolean }>(town(await post(1, { action: 'water', to: 2 }), env))).toEqual({ ok: true });
     expect(await json<{ ok: boolean }>(town(await post(1, { action: 'water', to: 2 }), env))).toEqual({ ok: false });
-    // Без теплицы полив ждёт; с теплицей — приходит и списывается.
-    expect((await json<Day>(town(await post(2, { action: 'day' }), env))).waters).toBe(0);
-    expect((await json<Day>(town(await post(2, { action: 'day', garden: true }), env))).waters).toBe(1);
-    expect((await json<Day>(town(await post(2, { action: 'day', garden: true }), env))).waters).toBe(0);
+    const day = await json<Day>(town(await post(2, { action: 'day', garden: true }), env));
+    expect(day.enabled).toBe(true);
+    expect(day.waters).toBeUndefined();
   });
 
   it('цель недели: выручка всех магазинов плюс соседи; цель растёт с числом магазинов', async () => {

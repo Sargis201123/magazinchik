@@ -47,6 +47,7 @@ import { districtGuests } from './district';
 import { districtNight } from './districtPlots';
 import { hoodGuests } from './hood';
 import { tenantGuests, tenantsNight } from './tenants';
+import { yardNight } from './garden';
 import { estateGuests, estateMorning, estateNight } from './estate';
 import { settleVan, type VanResult } from './van';
 import { rentalNight, type RentalDay } from './rental';
@@ -78,11 +79,13 @@ export interface NightSummary extends NightResult {
   branch: number;
   /** Аренда от арендаторов флигеля за день (tenants.ts). */
   rent: number;
+  /** Бабушкин двор за день (garden.ts; 0 - двора нет). */
+  yard: number;
   /** Аренда с лавок скупленной улицы за день (estate.ts; 0 — никого). */
   estate: number;
   /** Итог выезда фургона (van.ts) или null — сегодня не выезжал. */
   van: VanResult | null;
-  /** Прокат у входа за день (rental.ts): сколько взяли и не вернули, сколько денег; null — стойки нет или закрыта. */
+  /** Прокат у входа за день (rental.ts): сколько взяли и сколько денег; null - стойки нет или закрыта. */
   rental: RentalDay | null;
   /** Вечер у автоматов в подвале (basement.ts): доход, доля «крыши», облава; null — автоматов нет. */
   slots: SlotsDay | null;
@@ -148,11 +151,15 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Арендаторы флигеля платят за день — тоже до счетов (tenants.ts).
   const rent = tenantsNight(s);
   s = rent.state;
+  // Бабушкин двор: каждая грядка приносит деньги вечером - тоже до счетов, как аренда (garden.ts).
+  const yard = yardNight(s);
+  s = yard.state;
   // Лавки скупленной улицы — тоже до счетов; бар иногда шумит (estate.ts).
   const estate = estateNight(s);
   s = estate.state;
-  // Фургон вернулся с выезда (van.ts): выручка — до счетов, остаток — на склад до ночи (там он и стареет).
-  const van = settleVan(s);
+  // Фургон вернулся с выезда (van.ts, 27.11 ездит сам): выручка за вычетом товара и бензина - до счетов. Считается
+  // по магазину дня (state), как над фургоном в сцене: если вечером отобрали лицензию, выезд это не меняет.
+  const van = settleVan(s, state);
   s = van.state;
   // Прокат у входа — тоже до счетов (rental.ts). Прохожие — гости дня по утреннему состоянию: как в прогнозе утра.
   const rental = rentalNight(s, guestsToday(state));
@@ -206,6 +213,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     weekly: { completed: weekly.completed, earned: weekly.earned },
     branch: branch.income,
     rent: rent.income,
+    yard: yard.income,
     estate: estate.income,
     van: van.result,
     rental: rental.day,
@@ -311,14 +319,14 @@ export const guestsToday = (state: StoreState): number => Math.round(expectedGue
 /** Сколько гостей в день прибавится, если магазин станет таким (after — с новой кассой или киоском): для «Развития». */
 export const guestsGain = (state: StoreState, after: StoreState): number => Math.max(0, guestsToday(after) - guestsToday(state));
 
-/** Откуда пришли деньги мимо кассы зала (otherIncome): аренда, лавки улицы, филиал, этажи, фургон, прокат, тележка. */
-export type IncomeId = 'rent' | 'estate' | 'branch' | 'home' | 'van' | 'rental' | 'slots' | 'clothes' | 'food' | 'cart';
+/** Откуда пришли деньги мимо кассы зала (otherIncome): аренда, двор, лавки улицы, филиал, этажи, фургон, прокат, тележка. */
+export type IncomeId = 'rent' | 'yard' | 'estate' | 'branch' | 'home' | 'van' | 'rental' | 'slots' | 'clothes' | 'food' | 'cart';
 
 /**
  * Прочие доходы вечера — всё, что nightCycle зачислил мимо кассы зала. 21.11, автор: «не показывает ежедневно
  * в выручке доход с аренды — он вообще есть?». Есть: эти деньги приходят каждый вечер до счетов, но «Выручка»
  * в итогах — только касса зала, а они прятались под «Подробнее». Теперь итоги показывают их одним блоком (ui/hud.ts).
- * Только отчёт: суммы ровно те, что уже легли в кассу в nightCycle (branchNight, tenantsNight, estateNight, settleVan,
+ * Только отчёт: суммы ровно те, что уже легли в кассу в nightCycle (branchNight, tenantsNight, yardNight, estateNight, settleVan,
  * rentalNight, basementNight, clothesNight, foodcourtNight, dreamsNight, zarHomeNight), — второй раз ничего не начисляем.
  * Только ненулевые; облава в подвале, неудачный выезд и плата продавцу второго этажа — с минусом (их вычитают в тот же вечер).
  */
@@ -326,6 +334,7 @@ export function otherIncome(night: NightSummary): { id: IncomeId; n: number }[] 
   const slots = night.slots ? (night.slots.raid ? -night.slots.raid.fine : night.slots.income - night.slots.share) : 0;
   const rows: { id: IncomeId; n: number }[] = [
     { id: 'rent', n: night.rent },
+    { id: 'yard', n: night.yard ?? 0 },
     { id: 'estate', n: night.estate },
     { id: 'branch', n: night.branch },
     { id: 'home', n: night.home },

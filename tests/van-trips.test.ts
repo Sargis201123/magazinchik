@@ -1,33 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buyStock, newGame, PRODUCTS, warehouseCapacity, warehouseCount, type ProductId, type Stock, type StoreState, type Unit } from '../src/game/economy';
+import { newGame, PRODUCTS, warehouseCapacity, warehouseCount, type ProductId, type Stock, type StoreState, type Unit } from '../src/game/economy';
 import {
-  autoLoad,
   buyVan,
-  cancelTrip,
-  inStore,
-  loadVan,
+  migrateVan,
   nextVanEvent,
-  planTrip,
   settleVan,
-  tripToday,
-  unloadVan,
-  vanAging,
+  vanCalendar,
+  vanCargo,
   vanCrowd,
   vanEvents,
   vanFuel,
-  vanGoes,
+  vanGain,
   vanIncident,
-  vanLoaded,
+  vanMargin,
   vanOpen,
   vanOutcome,
   vanPrice,
-  vanNews,
+  vanTripOn,
   vanWant,
-  vanWanted,
-  seeVanNews,
-  skipTrip,
-  vanIdle,
-  vanTakeable,
   weekendDay,
   VAN_CAP,
   VAN_EVENTS,
@@ -44,13 +34,15 @@ import { weatherFor } from '../src/game/weather';
 import { nightCycle } from '../src/game/day';
 import { emptyDayStats } from '../src/game/economy';
 import { pendingTip, seeTip, TIP_ICONS, type TipId } from '../src/game/tips';
-import { pickNews } from '../src/game/headlines';
+import { NEWS_IDS } from '../src/game/headlines';
 import { switchDistrict } from '../src/game/zarechye';
 import { simulate } from '../src/game/simulate';
 import { ru } from '../src/i18n/ru';
 
-// Выездная торговля (van.ts, 13.11): когда и куда можно выехать, погрузка из магазина, итог вечером,
-// случаи в дороге — всё от зерна магазина и номера дня; старые сохранения без фургона работают как раньше.
+// Выездная торговля (van.ts, 13.11): когда и куда можно выехать, итог вечером, случаи в дороге — всё от зерна
+// магазина и номера дня; старые сохранения без фургона работают как раньше.
+// 27.11: фургон ездит сам — в день события на самое выгодное, груз берёт у поставщика (полки и склад не трогает),
+// вечером в кассу выручка за вычетом товара и бензина. Старый загруженный кузов при загрузке — на склад.
 
 const units = (n: number, age = 0): Unit[] => Array.from({ length: n }, () => ({ age }));
 
@@ -85,7 +77,17 @@ function findDay(event: VanEventId, incident: VanIncident | undefined, seed = 7,
   throw new Error(`нет дня для ${event}/${incident}`);
 }
 
+/** Первый день (от `from`), когда фургон сам едет на `event` и случай в дороге — `incident`. */
+function tripDay(event: VanEventId, incident: VanIncident | undefined, seed = 7, from = 20): number {
+  for (let day = from; day < from + 3000; day++) {
+    const s = withVan({ day, seed });
+    if (vanTripOn(s) === event && vanIncident(s, event) === incident) return day;
+  }
+  throw new Error(`нет выезда ${event}/${incident}`);
+}
+
 const count = (stock: Stock, id: ProductId): number => stock[id]?.length ?? 0;
+const total = (stock: Stock): number => Object.values(stock).reduce((n, u) => n + (u?.length ?? 0), 0);
 
 describe('фургон: когда и куда', () => {
   it('матч — раз в неделю, в тот же день, что и на своём стадионе; свой стадион — бензина меньше', () => {
@@ -133,145 +135,127 @@ describe('фургон: покупка', () => {
     expect(buyVan(bought)).toBeNull();
     expect(vanOpen(shop({ zar: { at: 'zar' } as StoreState['zar'] }))).toBe(false);
   });
-
-  it('куда ехать — только из событий дня', () => {
-    const s = withVan({ day: 25 });
-    expect(planTrip(shop(), 'match')).toBeNull();
-    expect(planTrip(s, 'beach')).toBeNull();
-    expect(tripToday(planTrip(s, 'match')!)).toEqual({ day: 25, event: 'match', load: {} });
-  });
 });
 
-describe('фургон: погрузка', () => {
-  it('сначала склад (старое — первым), потом полки; не больше места в кузове', () => {
-    const s = planTrip(withVan(), 'match')!;
-    const a = loadVan(s, 'water', 12)!;
-    expect(count(a.warehouse, 'water')).toBe(0);
-    expect(a.shelves[0].items.water).toHaveLength(2);
-    expect(vanLoaded(a)).toBe(12);
-    expect(inStore(a, 'water')).toBe(inStore(s, 'water') - 12);
-    expect(tripToday(a)!.load.water![0].age).toBe(1);
-    // 12 воды + 8 сока = 20: мороженого влезет только 4 из 9, мясо — уже никак.
-    const full = loadVan(loadVan(a, 'juice', 8)!, 'icecream', 9)!;
-    expect(vanLoaded(full)).toBe(VAN_CAP);
-    expect(tripToday(full)!.load.icecream).toHaveLength(VAN_CAP - 20);
-    expect(loadVan(full, 'meat', 1)).toBeNull();
-  });
-
-  it('брак, по которому не решили, со склада не грузят; нечего грузить — null', () => {
-    const s = planTrip(withVan({ warehouse: { water: [{ age: 0, bad: true, pending: true }] }, shelves: [] }), 'match')!;
-    expect(loadVan(s, 'water', 5)).toBeNull();
-    expect(loadVan(withVan(), 'water', 5)).toBeNull();
-  });
-
-  it('выгрузить — на склад; «Не едем» — всё назад и выезда нет', () => {
-    const s = loadVan(planTrip(withVan(), 'match')!, 'water', 12)!;
-    const one = unloadVan(s, 'water', 3);
-    expect(vanLoaded(one)).toBe(9);
-    expect(count(one.warehouse, 'water')).toBe(3);
-    const none = cancelTrip(s);
-    expect(none.van?.trip).toBeUndefined();
-    expect(inStore(none, 'water')).toBe(inStore(withVan(), 'water'));
-  });
-
-  it('«Загрузить под событие» — каждого товара сколько обычно разбирают, из того, что есть', () => {
-    const s = autoLoad(planTrip(withVan(), 'match')!);
-    const load = tripToday(s)!.load;
-    expect(count(load, 'water')).toBe(Math.min(vanWant(s, 'match', 'water'), 14));
-    expect(count(load, 'juice')).toBe(vanWant(s, 'match', 'juice'));
-    expect(count(load, 'pies')).toBe(0);
-    expect(vanGoes(s)).toBe(true);
-  });
-});
-
-describe('фургон: вечер', () => {
-  const loaded = (day: number, seed = 7, event: VanEventId = 'match') => autoLoad(planTrip(withVan({ day, seed }), event)!);
-
-  it('итог детерминирован: тот же магазин и день — тот же итог; зерно — другой день', () => {
+describe('фургон ездит сам (27.11)', () => {
+  it('в день события едет сам, без фургона и без событий — нет', () => {
     const day = findDay('match', undefined);
-    expect(vanOutcome(loaded(day))).toEqual(vanOutcome(loaded(day)));
+    expect(vanTripOn(shop({ day }))).toBeNull();
+    expect(vanTripOn(withVan({ day }))).not.toBeNull();
+    let quiet = 20;
+    while (vanEvents(shop({ day: quiet })).length) quiet++;
+    expect(vanTripOn(withVan({ day: quiet }))).toBeNull();
+  });
+
+  it('из двух событий дня — самое выгодное', () => {
+    for (let day = 20; day < 400; day++) {
+      const s = withVan({ day });
+      const events = vanEvents(s);
+      if (events.length < 2) continue;
+      const best = vanTripOn(s)!;
+      for (const e of events) expect(vanGain(s, best)).toBeGreaterThanOrEqual(vanGain(s, e));
+      return;
+    }
+    throw new Error('нет дня с двумя событиями');
+  });
+
+  it('груз — только товары магазина, самые ходовые первыми, не больше кузова; пиво и сигареты — с лицензией', () => {
+    const s = withVan();
+    const cargo = vanCargo(s, 'match');
+    // Матч: вода, сок, мороженое — есть у магазина; выпечки своей, кваса и пива нет.
+    expect(cargo.map((c) => c.id)).toEqual(['water', 'juice', 'icecream']);
+    for (const { id, n } of cargo) expect(n).toBe(vanWant(s, 'match', id));
+    expect(vanWant(s, 'match', 'beer')).toBe(0);
+    const licensed = withVan({ license: { since: 1 }, shelves: [...shop().shelves, { kind: 'license', level: 0, items: {} }] } as Partial<StoreState>);
+    expect(vanWant(licensed, 'match', 'beer')).toBeGreaterThan(0);
+    const full = vanCargo(licensed, 'match');
+    expect(full.map((c) => c.id)).toContain('beer');
+    expect(full.reduce((n, c) => n + c.n, 0)).toBeLessThanOrEqual(VAN_CAP);
+  });
+
+  it('выручка — по цене выезда, товар — по закупке, бензин вычтен', () => {
+    const day = tripDay('match', undefined);
+    const s = withVan({ day });
+    const out = vanOutcome(s)!;
+    expect(out.event).toBe('match');
+    expect(out.sold).toBeGreaterThan(0);
+    expect(out.sold).toBeLessThanOrEqual(vanCargo(s, 'match').reduce((n, c) => n + c.n, 0));
+    expect(vanPrice('water', 'match')).toBe(Math.round(PRODUCTS.water.basePrice * 1.2));
+    expect(vanMargin('water', 'match')).toBe(vanPrice('water', 'match') - PRODUCTS.water.cost);
+    expect(out.goods).toBeGreaterThan(0);
+    expect(out.goods).toBeLessThan(out.revenue);
+    expect(out.net).toBe(out.revenue - out.goods! - VAN_EVENTS.match.fuel);
+    expect(vanOutcome(s)).toEqual(out);
     expect(vanCrowd(shop({ day, seed: 7 }))).not.toBe(vanCrowd(shop({ day, seed: 8 })));
   });
 
-  it('выручка — по цене выезда, бензин вычтен, остаток — на склад, выезд закрыт', () => {
-    const day = findDay('match', undefined);
-    const s = loaded(day);
-    const out = vanOutcome(s)!;
-    expect(out.sold).toBeGreaterThan(0);
-    expect(out.sold + out.back + out.spoiled).toBe(vanLoaded(s));
-    expect(vanPrice('water', 'match')).toBe(Math.round(PRODUCTS.water.basePrice * 1.2));
-    expect(out.net).toBe(out.revenue - VAN_EVENTS.match.fuel);
+  it('полки и склад не трогает: ни утром, ни ночью; места склада фургон не держит', () => {
+    const day = tripDay('match', undefined);
+    const s = withVan({ day });
     const night = settleVan(s);
-    const { home: _home, ...result } = out;
-    expect(night.result).toEqual(result);
+    expect(night.result).not.toBeNull();
+    expect(night.state.warehouse).toBe(s.warehouse);
+    expect(night.state.shelves).toBe(s.shelves);
+    expect(warehouseCount(s)).toBe(total(s.warehouse));
+  });
+
+  it('ночь: итог в кассу, счётчики выездов и заработка', () => {
+    const day = tripDay('match', undefined);
+    const s = withVan({ day });
+    const out = vanOutcome(s)!;
+    const night = settleVan(s);
+    expect(night.result).toEqual(out);
     expect(night.state.money).toBe(s.money + out.net);
-    expect(night.state.van).toEqual({ since: day, last: night.result, trips: 1, earned: out.net });
-    expect(inStore(night.state, 'water') + inStore(night.state, 'juice') + inStore(night.state, 'icecream') + inStore(night.state, 'meat')).toBe(
-      inStore(s, 'water') + inStore(s, 'juice') + inStore(s, 'icecream') + inStore(s, 'meat') + out.back,
-    );
+    // back/spoiled/seen - на один выпуск для старого клиента (откат, кэш): его карточка выезда без них писала NaN.
+    expect(night.state.van).toEqual({ since: day, last: { ...out, back: 0, spoiled: 0, seen: true }, trips: 1, earned: out.net });
+    const cycle = nightCycle(s, emptyDayStats(), () => 0.5);
+    expect(cycle.van).toEqual(out);
+    expect(cycle.state.van?.last?.day).toBe(day);
   });
 
-  it('без холодильника весь день: мясо стареет на два дня, хлеб — на день, вода — никак', () => {
-    expect(vanAging('meat')).toBe(2);
-    expect(vanAging('icecream')).toBe(2);
-    expect(vanAging('bread')).toBe(1);
-    expect(vanAging('water')).toBe(0);
-    expect(vanAging('jam')).toBe(0);
-  });
-
-  it('дождь на пляже — продажи почти ноль; колесо — ремонт; щедрый покупатель — чаевые', () => {
-    const rainy = loaded(findDay('beach', 'rain'), 7, 'beach');
-    const rain = vanOutcome(rainy)!;
+  it('дождь на пляже — продажи почти ноль и минус в долг; колесо — ремонт; щедрый покупатель — чаевые', () => {
+    const rain = vanOutcome(withVan({ day: tripDay('beach', 'rain') }))!;
     expect(rain.incident).toBe('rain');
-    expect(rain.sold).toBeLessThanOrEqual(1);
+    expect(rain.sold).toBeLessThanOrEqual(2);
     expect(rain.net).toBeLessThan(0);
-    const wheel = vanOutcome(loaded(findDay('match', 'wheel')))!;
+    // 14.11, аудит: неудачный выезд — нехватка в долг, как у всех.
+    const broke = settleVan({ ...withVan({ day: rain.day }), money: 5, debt: 100 }).state;
+    expect(broke.money).toBe(Math.max(0, 5 + rain.net));
+    expect(broke.debt).toBe(100 + Math.max(0, -(5 + rain.net)));
+    const wheel = vanOutcome(withVan({ day: tripDay('match', 'wheel') }))!;
     expect(wheel.extra).toBe(-VAN_REPAIR);
-    expect(wheel.net).toBe(wheel.revenue - VAN_REPAIR - wheel.fuel);
-    const kind = vanOutcome(loaded(findDay('match', 'generous')))!;
+    expect(wheel.net).toBe(wheel.revenue - wheel.goods! - VAN_REPAIR - wheel.fuel);
+    const kind = vanOutcome(withVan({ day: tripDay('match', 'generous') }))!;
     expect(kind.extra).toBeGreaterThanOrEqual(VAN_TIP_MIN);
-    const jam = vanOutcome(loaded(findDay('match', 'jam')))!;
+    const jam = vanOutcome(withVan({ day: tripDay('match', 'jam') }))!;
     expect(jam.incident).toBe('jam');
   });
 
-  it('пустой кузов — не едем: ни бензина, ни итога', () => {
-    const s = planTrip(withVan(), 'match')!;
-    const night = settleVan(s);
-    expect(night.result).toBeNull();
-    expect(night.state.money).toBe(s.money);
-    expect(night.state.van?.trip).toBeUndefined();
+  it('свой стадион — бензина меньше, выезд выгоднее', () => {
+    const near = withVan({ day: opensOn('stadium') + 7 - ((opensOn('stadium') + 3) % 7) });
+    expect(vanFuel(near, 'match')).toBe(VAN_FUEL_NEAR);
+    expect(vanGain(near, 'match')).toBe(vanCargo(near, 'match').reduce((n, c) => n + c.n * vanMargin(c.id, 'match'), 0) - VAN_FUEL_NEAR);
   });
 
-  it('не разобранный вчерашний выезд — товар просто возвращается, без продаж и бензина', () => {
-    const s = loadVan(planTrip(withVan(), 'match')!, 'water', 10)!;
-    const tomorrow = { ...s, day: s.day + 1 };
-    const night = settleVan(tomorrow);
-    expect(night.result).toBeNull();
-    expect(night.state.money).toBe(s.money);
-    expect(inStore(night.state, 'water')).toBe(inStore(withVan(), 'water'));
-    expect(night.state.van?.trip).toBeUndefined();
+  it('в Заречье фургон ждёт: выезда нет, ночь его не трогает', () => {
+    const day = tripDay('match', undefined);
+    const s = { ...withVan({ day }), zar: { at: 'zar', since: 1, away: {} } as unknown as StoreState['zar'] };
+    expect(vanTripOn(s)).toBeNull();
+    expect(settleVan(s).state).toBe(s);
+    const home = withVan({ day, zar: { at: 'home', since: 1, away: {} } as unknown as StoreState['zar'] });
+    expect(switchDistrict(home, 'zar').van).toEqual(home.van);
   });
 
-  it('ночь (nightCycle): итог выезда в сводке, деньги — в кассе, товар назад — на складе', () => {
-    const day = findDay('match', undefined);
-    const s = loaded(day);
-    const out = vanOutcome(s)!;
-    const night = nightCycle(s, emptyDayStats(), () => 0.5);
-    expect(night.van).toMatchObject({ day, sold: out.sold, net: out.net });
-    expect(night.state.van?.trip).toBeUndefined();
-    expect(night.state.van?.last?.day).toBe(day);
-  });
-});
-
-describe('фургон: продукты, которые портятся', () => {
-  it('мясо, которое не продали, весь день без холодильника — назад не доезжает, вода возвращается', () => {
-    // На матче мясо не берут: всё, что увезли, — испорчено; воду везут назад целой.
-    const day = findDay('match', undefined);
-    const s = loadVan(planTrip(withVan({ day }), 'match')!, 'meat', 6)!;
-    const out = vanOutcome(s)!;
-    expect(out.sold).toBe(0);
-    expect(out.spoiled).toBe(6);
-    expect(out.back).toBe(0);
+  it('календарь: один выезд в день — тот, куда фургон поедет, с обычным заработком', () => {
+    const s = withVan();
+    const plan = vanCalendar(s, 5, 14);
+    expect(plan.length).toBeGreaterThan(0);
+    expect(new Set(plan.map((p) => p.day)).size).toBe(plan.length);
+    for (const p of plan) {
+      expect(p.event).toBe(vanTripOn(s, p.day));
+      expect(p.gain).toBe(vanGain(s, p.event, p.day));
+    }
+    expect(vanCalendar(shop(), 5, 14)).toEqual([]);
   });
 });
 
@@ -286,18 +270,46 @@ describe('старые сохранения и подсказка', () => {
     expect(settleVan(s).state).toBe(s);
   });
 
-  it('сохранение: старое без фургона и новое с загруженным кузовом загружаются как были', async () => {
+  it('старый загруженный кузов: на склад, сколько влезет, остальное — продаём по закупке; «Не едем» снят', () => {
+    const base = withVan();
+    const load = { water: units(10, 2), meat: units(4, 1) };
+    const old = { ...base, van: { ...base.van!, trip: { day: 25, event: 'match' as const, load }, skip: 24 } };
+    const room = warehouseCapacity(old) - warehouseCount(old);
+    expect(room).toBeGreaterThanOrEqual(14);
+    const moved = migrateVan(old);
+    expect(moved.van).toEqual({ since: 25 });
+    expect(count(moved.warehouse, 'water')).toBe(count(old.warehouse, 'water') + 10);
+    expect(count(moved.warehouse, 'meat')).toBe(count(old.warehouse, 'meat') + 4);
+    expect(moved.money).toBe(old.money);
+    // Склад почти полон: два места — остальное продаём по закупке.
+    const tight = { ...old, warehouse: { ...old.warehouse, potatoes: units(room - 2) } };
+    const sold = migrateVan(tight);
+    expect(warehouseCount(sold)).toBe(warehouseCapacity(sold));
+    // Вода первой: 2 штуки на склад, 8 — по закупке; мясу места уже нет — 4 по закупке.
+    expect(count(sold.warehouse, 'water')).toBe(count(tight.warehouse, 'water') + 2);
+    expect(sold.money).toBe(tight.money + 8 * PRODUCTS.water.cost + 4 * PRODUCTS.meat.cost);
+    // Без кузова — ничего не меняется.
+    expect(migrateVan(base)).toBe(base);
+    expect(migrateVan(shop())).toEqual(shop());
+  });
+
+  it('сохранение с загруженным кузовом грузится: кузов уже на складе', async () => {
     const local: Record<string, string> = {};
     Object.assign(globalThis, { localStorage: { getItem: (k: string) => local[k] ?? null, setItem: (k: string, v: string) => (local[k] = v), removeItem: (k: string) => delete local[k] } });
     vi.resetModules();
     const { loadGame } = await import('../src/game/save');
     local['magazinchik.save'] = JSON.stringify({ version: 11, state: shop() });
     expect(loadGame()!.van).toBeUndefined();
-    const loaded = autoLoad(planTrip(withVan(), 'match')!);
-    local['magazinchik.save'] = JSON.stringify({ version: 11, state: loaded });
+    const base = withVan();
+    const old = { ...base, van: { ...base.van!, trip: { day: 25, event: 'match', load: { water: units(12) } } } };
+    local['magazinchik.save'] = JSON.stringify({ version: 11, state: old });
     const back = loadGame()!;
-    expect(back.van).toEqual(loaded.van);
-    expect(vanLoaded(back)).toBe(vanLoaded(loaded));
+    expect(back.van).toEqual({ since: 25 });
+    expect(count(back.warehouse, 'water')).toBe(count(base.warehouse, 'water') + 12);
+  });
+
+  it('утренней новости «Как съездил фургон» больше нет', () => {
+    expect(NEWS_IDS as readonly string[]).not.toContain('van');
   });
 
   it('подсказка «Новое»: с минимаркета, пока фургона нет', () => {
@@ -310,123 +322,30 @@ describe('старые сохранения и подсказка', () => {
     expect(ru['tip.van.title']).toBeTruthy();
   });
 
+  it('выезд приносит чистыми в среднем ~700, как до 27.11 после цены товара (магазин со всеми отделами, год выездов)', () => {
+    const ALL = ['candy', 'coffee', 'oven', 'night', 'cat', 'loyalty', 'gear', 'departments', 'radio', 'brand', 'cafe', 'kitchen', 'rush', 'tenants', 'garden', 'apprentice', 'rental', 'lottery', 'ads', 'van'];
+    const shop0 = simulate({ days: 80, seed: 1, features: Object.fromEntries(ALL.map((f) => [f, true])) }).final;
+    expect(shop0.van).toBeDefined();
+    const nets: number[] = [];
+    for (let day = shop0.day; day < shop0.day + 112; day++) {
+      const out = vanOutcome({ ...shop0, day });
+      if (out) nets.push(out.net);
+    }
+    // Выезд — примерно в каждый второй день (дни событий), чистыми за выезд — 550…900.
+    expect(nets.length).toBeGreaterThan(40);
+    const avg = nets.reduce((a, b) => a + b, 0) / nets.length;
+    expect(avg).toBeGreaterThan(550);
+    expect(avg).toBeLessThan(900);
+  });
+
   it('симулятор с фургоном идёт: выезды есть, баланс не уезжает', () => {
     const base = simulate({ days: 60, seed: 3, features: { tenants: true, garden: true } });
     const van = simulate({ days: 60, seed: 3, features: { tenants: true, garden: true, van: true } });
     // 15.11: с ещё одной комнатой под аренду симулятор тратит на отделку раньше и покупает фургон на пару дней позже —
-    // к 60-му дню на выезд меньше (6 → 5).
-    expect(van.final.van?.trips ?? 0).toBeGreaterThanOrEqual(5);
+    // к 60-му дню на выезд меньше (6 → 5). 27.11: двор в симуляторе приносит деньги как в игре (раньше урожай каждое
+    // утро бесплатно шёл на прилавок, двор был ~в 10 раз богаче) — денег к 60-му дню меньше, фургон позже (5 → 4).
+    expect(van.final.van?.trips ?? 0).toBeGreaterThanOrEqual(4);
     expect(van.levelDay).toEqual(base.levelDay);
     expect(Math.abs(van.final.money - base.final.money)).toBeLessThan(base.final.money * 0.25);
-  });
-});
-
-describe('фургон: утренняя новость и лицензия', () => {
-  const loaded = (day: number, seed = 7) => autoLoad(planTrip(withVan({ day, seed }), 'match')!);
-
-  it('случай в дороге — новость утра (одна, в общей очереди), прочли — больше нет; без случая — новости нет', () => {
-    const day = findDay('match', 'wheel');
-    const night = settleVan(loaded(day)).state;
-    const morning = { ...night, day: day + 1 };
-    expect(vanNews(morning)?.incident).toBe('wheel');
-    expect(pickNews(morning, ['van', 'tale']).id).toBe('tale');
-    expect(pickNews(morning, ['van']).id).toBe('van');
-    const seen = seeVanNews(morning);
-    expect(vanNews(seen)).toBeNull();
-    expect(seen.van?.last?.seen).toBe(true);
-    // Через неделю старая история уже не новость.
-    expect(vanNews({ ...night, day: day + 5 })).toBeNull();
-    const calm = settleVan(loaded(findDay('match', undefined))).state;
-    expect(vanNews({ ...calm, day: calm.day + 1 })).toBeNull();
-  });
-
-  it('пиво и сигареты на матч — только с лицензией', () => {
-    const s = planTrip(withVan(), 'match')!;
-    expect(vanWant(s, 'match', 'beer')).toBe(0);
-    expect(vanWanted(s, 'match')).not.toContain('beer');
-    expect(vanWanted(s, 'match')).not.toContain('cigarettes');
-    const licensed = { ...s, license: { since: 1 } } as StoreState;
-    expect(vanWant(licensed, 'match', 'beer')).toBeGreaterThan(0);
-    expect(vanWanted(licensed, 'match')).toContain('beer');
-  });
-
-  it('уехали работать в Заречье — кузов назад на склад Центра, ночью Заречье его не трогает', () => {
-    const s = loadVan(planTrip(withVan({ zar: { at: 'home', since: 1, away: {} } as unknown as StoreState['zar'] }), 'match')!, 'water', 10)!;
-    const away = switchDistrict(s, 'zar');
-    expect(away.van?.trip).toBeUndefined();
-    const back = switchDistrict(away, 'home');
-    expect(inStore(back, 'water')).toBe(inStore(s, 'water') + 10);
-    // Старый кузов в Заречье ночью не разбирают (склад там чужой).
-    const stale = { ...s, zar: { ...s.zar!, at: 'zar' as const } };
-    expect(settleVan(stale).state).toBe(stale);
-  });
-
-  it('кузов с прошлого дня при новом выборе — сначала на склад', () => {
-    const s = loadVan(planTrip(withVan(), 'match')!, 'water', 10)!;
-    const day = s.day + 7;
-    const next = planTrip({ ...s, day }, 'match')!;
-    expect(vanLoaded(next)).toBe(0);
-    expect(inStore(next, 'water')).toBe(inStore(withVan(), 'water'));
-  });
-});
-
-describe('фургон: места на складе и «Не едем» (13.11, ревью)', () => {
-  /** Склад забит под завязку: к тому, что есть, — картошка до вместимости. */
-  const packed = (s: StoreState): StoreState => ({
-    ...s,
-    warehouse: { ...s.warehouse, potatoes: units(warehouseCapacity(s) - warehouseCount(s)) },
-  });
-
-  it('кузов держит места склада: погрузил со склада — докупить на эти места нельзя, выгрузка влезает', () => {
-    const s = planTrip(packed(withVan()), 'match')!;
-    expect(warehouseCount(s)).toBe(warehouseCapacity(s));
-    const a = loadVan(s, 'water', 10)!;
-    expect(vanLoaded(a)).toBe(10);
-    expect(warehouseCount(a)).toBe(warehouseCapacity(a));
-    expect(buyStock(a, 'water', 1, 1)).toBeNull();
-    const back = unloadVan(a);
-    expect(warehouseCount(back)).toBe(warehouseCapacity(back));
-  });
-
-  it('склад полон — с полок в кузов не берут; есть два места — берут два', () => {
-    const s = planTrip(packed(withVan({ warehouse: { water: units(4) } })), 'match')!;
-    // Мороженое только в ларе: склад полон — грузить нечего.
-    expect(vanTakeable(s, 'icecream')).toBe(0);
-    expect(loadVan(s, 'icecream', 3)).toBeNull();
-    // Вода: склад целиком (4), с полок — ни штуки.
-    expect(vanTakeable(s, 'water')).toBe(4);
-    expect(vanLoaded(loadVan(s, 'water', 8)!)).toBe(4);
-    const roomy = { ...s, warehouse: { ...s.warehouse, potatoes: s.warehouse.potatoes!.slice(2) } };
-    expect(vanTakeable(roomy, 'icecream')).toBe(2);
-    const ice = loadVan(roomy, 'icecream', 3)!;
-    expect(vanLoaded(ice)).toBe(2);
-    expect(warehouseCount(ice)).toBe(warehouseCapacity(ice));
-  });
-
-  it('ночью остаток выезда возвращается на склад и не переполняет его', () => {
-    const s = autoLoad(planTrip(packed(withVan()), 'match')!);
-    expect(vanLoaded(s)).toBeGreaterThan(0);
-    const night = settleVan(s).state;
-    expect(night.van?.trip).toBeUndefined();
-    expect(warehouseCount(night)).toBeLessThanOrEqual(warehouseCapacity(night));
-  });
-
-  it('«Не едем» — до завтра фургон не просит внимания; в следующий день события — снова просит', () => {
-    const s = withVan();
-    expect(vanIdle(s)).toBe(true);
-    const skipped = skipTrip(planTrip(s, 'match')!);
-    expect(skipped.van?.trip).toBeUndefined();
-    expect(vanIdle(skipped)).toBe(false);
-    // Передумал и выбрал событие — отказ снят.
-    expect(planTrip(skipped, 'match')!.van?.skip).toBeUndefined();
-    const nextMatch = { ...skipped, day: skipped.day + 7 };
-    expect(vanEvents(nextMatch)).toContain('match');
-    expect(vanIdle(nextMatch)).toBe(true);
-  });
-
-  it('грузить нечего — не просим', () => {
-    const empty = withVan({ warehouse: {}, shelves: [] });
-    expect(vanEvents(empty).length).toBeGreaterThan(0);
-    expect(vanIdle(empty)).toBe(false);
   });
 });

@@ -35,8 +35,7 @@ import * as staff from './staff';
 import * as persons from './persons';
 import * as visitors from './visitors';
 import * as morningFlow from './morningFlow';
-import * as gardenFx from './gardenFx';
-import { fetchDayShop, likeDayShop, townInfo, waterFriend, wateredToday } from '../platform/town';
+import { fetchDayShop, likeDayShop, townInfo } from '../platform/town';
 import * as shelves from './shelves';
 
 /**
@@ -71,25 +70,9 @@ export async function visitFriend(scene: StoreScene, id: number, name: string): 
         });
       }, 'ui-btn secondary', presentGiven(id))
     : null;
-  // Полить теплицу друга (game/garden.ts): раз в день, его урожай поспеет на час раньше.
-  const pour = guest.garden
-    ? button(wateredToday(id) ? t('town.water.done') : `💧 ${t('town.water.btn')}`, () => {
-        pour!.disabled = true;
-        void waterFriend(id).then((ok) => {
-          pour!.textContent = t('town.water.done');
-          const yard = gardenFx.yardFocus(scene);
-          scene.cameras.main.pan(yard.x, yard.y, 500, 'Sine.easeInOut', true);
-          if (ok) {
-            track('water_friend', home.day);
-            scene.popup(yard.x, yard.y - 10, '💧💧💧', '#9cd8ff');
-          }
-        });
-      }, 'ui-btn secondary', wateredToday(id))
-    : null;
   bar.append(
     el('div', 'ui-arrange-hint', t('visitShop.bar', { name: res!.name || name, shop, rating: guest.rating.toFixed(1), day: guest.day })),
     ...(gift ? [gift] : []),
-    ...(pour ? [pour] : []),
     button(`🏠 ${t('visitShop.home')}`, () => {
       bar.remove();
       scene.state = home;

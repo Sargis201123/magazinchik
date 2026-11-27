@@ -49,7 +49,7 @@ import { fpsSummary } from '../platform/quality';
 import { BOX_FROM_DAY, BOX_OPENS_DAY, firstDayGift, gentleDay, grannyBox, grannyStays, learningEvening, quietRating } from '../game/firstday';
 import { tomorrowTeaser } from '../game/nudge';
 import { teaserText } from '../ui/nudge';
-import { vanResultText } from '../ui/vanText';
+import { vanEventName, vanResultText, vanRoadText } from '../ui/vanText';
 import { lotteryDay, WIN_BONUS } from '../game/lottery';
 import { ART, TUTORIAL_DAYS, FACADE_H, LIGHT_DEPTH, nightGuestLook } from './common';
 import * as starPets from './starPets';
@@ -352,20 +352,23 @@ export function finishDay(scene: StoreScene): void {
   if (rent) extra.push([t('tenant.summary'), t('branch.summaryValue', { n: rent })]);
   // Лавки скупленной улицы (estate.ts): аренда за день одной строкой.
   if (night.estate) extra.push([t('estate.summary'), t('branch.summaryValue', { n: night.estate })]);
-  // Выезд фургона (van.ts): что продал, случай в дороге, что привёз назад, итого.
+  // Выезд фургона (van.ts, 27.11 ездит сам): что продал, товар, бензин, итого; случай в дороге — своей строкой
+  // (утренней новости с «Ясно» больше нет). Сумма с названием события — в «Прочих доходах».
   if (night.van) {
     extra.push([t('van.summary'), vanResultText(night.van)]);
+    const road = vanRoadText(night.van);
+    if (road) extra.push([`🚐 ${t('van.res.road')}`, road]);
     track('van_trip', finishedDay, night.van.net);
   }
   // Лотерея (game/lottery.ts, 15.11): сколько билетов взяли, доля магазина, сколько выиграло, крупный тираж.
   const lot = lotteryDay(before, night.state, finishedDay);
   if (lot) extra.push([t('lottery.summary'), [t('lottery.summaryValue', { n: lot.n, sum: lot.sum, w: lot.w }), ...(lot.big ? [t('lottery.summaryBig', { n: WIN_BONUS })] : [])].join(' · ')]);
-  // Прокат у входа (rental.ts): сколько раз взяли и сколько денег; кто не вернул — залог остался у нас.
+  // Прокат у входа (rental.ts): сколько раз взяли и сколько денег.
   const rental = night.rental;
-  if (rental?.rented) {
-    const lost = rental.lost ? ` · ${t('rental.summaryLost', { n: rental.lost, kept: rental.kept })}` : '';
-    extra.push([t('rental.summary'), `${t('rental.summaryValue', { icon: KIT_ICON[rental.kit], n: rental.rented, sum: rental.income })}${lost}`]);
-  }
+  if (rental?.rented) extra.push([t('rental.summary'), t('rental.summaryValue', { icon: KIT_ICON[rental.kit], n: rental.rented, sum: rental.income })]);
+  // Пассивные доходы в аналитику (27.11): сколько за вечер дали двор и прокат - видно в D1 по дням.
+  if (night.yard) track('yard_day', finishedDay, night.yard);
+  if (rental) track('rental_day', finishedDay, rental.income);
   // Автоматы в подвале (game/basement.ts): сколько дали за вечер (после доли «крыши») или облава.
   const slots = night.slots;
   if (slots) extra.push([t('bsm.summary'), slots.raid ? t('bsm.raid', { n: slots.raid.n, fine: slots.raid.fine }) : t('bsm.summaryValue', { n: slots.players, sum: slots.income - slots.share })]);
@@ -373,7 +376,9 @@ export function finishDay(scene: StoreScene): void {
   const clothes = night.clothes;
   if (clothes && (clothes.sold || clothes.sale || clothes.wage)) {
     const sale = clothes.sale ? ` · ${t('cl.summarySale', { n: clothes.sale })}` : '';
-    extra.push([t('cl.summary'), `${t('cl.summaryValue', { n: clothes.sold, sum: clothes.income - clothes.wage })}${sale}`]);
+    // 27.11: стойки пополняются сами - утренний завоз рядом с выручкой, чтобы этаж не казался вдвое прибыльнее.
+    const restock = clothes.restock ? ` · ${t('cl.summaryRestock', { n: clothes.restock })}` : '';
+    extra.push([t('cl.summary'), `${t('cl.summaryValue', { n: clothes.sold, sum: clothes.income - clothes.wage })}${sale}${restock}`]);
   }
   // Фудкорт на третьем этаже (game/foodcourt.ts): едоки и деньги за вечер; точку закрыли по жалобе — тоже строкой.
   const court = night.food;
@@ -452,6 +457,9 @@ export function finishDay(scene: StoreScene): void {
   newcomer.hallCoachOff(scene);
   saveGame(scene.state);
   track('day_end', finishedDay, scene.stats.revenue);
+  // 27.11 (полки на «Универмаге»): сколько ушли ни с чем у пустой полки и сколько ходок сделал грузчик - видно в D1.
+  track('lost_empty', finishedDay, scene.stats.lostWhy?.empty ?? 0);
+  if (scene.stats.work?.loader) track('loader_trips', finishedDay, scene.stats.work.loader);
   // Вовлечённость: сколько моментов дня поймали из показанных и сколько заданий дня выполнили.
   if (scene.stats.momentsShown) {
     track('moments_seen', finishedDay, scene.stats.momentsShown);
@@ -499,7 +507,19 @@ export function finishDay(scene: StoreScene): void {
         shortfall,
         total: state.money,
         housewarming: Boolean(bill?.housewarming),
-        other: otherIncome(night).map((r): [string, number] => [t(INCOME_KEYS[r.id]), r.n]),
+        // Фургон - с названием события: «🚐 Свадьба в соседнем районе +870». Фудкорт (27.11): точку закрыли по жалобе -
+        // видно прямо в строке дохода, а не только под «Подробнее». Второй этаж - с утренним завозом рядом.
+        other: otherIncome(night).map((r): [string, number] => [
+          r.id === 'van' && night.van
+            ? `🚐 ${vanEventName(scene.state, night.van.event)}`
+            : r.id === 'food' && night.food?.closed
+              ? `${t(INCOME_KEYS.food)} (${t('fc.summaryClosed', { name: t(`fc.stall.${night.food.closed}` as TextKey) })})`
+              : // Второй этаж: утренний завоз прямо в строке (деньги ушли утром, сумма строки - вечерние).
+                r.id === 'clothes' && night.clothes?.restock
+                ? `${t(INCOME_KEYS.clothes)} (${t('cl.summaryRestock', { n: night.clothes.restock })})`
+                : t(INCOME_KEYS[r.id]),
+          r.n,
+        ]),
         expected,
         passTip: scene.stats.passed ? queueAdviceKey(scene.state) : undefined,
       },
@@ -550,6 +570,7 @@ export function finishDay(scene: StoreScene): void {
 /** Подписи «Прочих доходов» в итогах дня (game/day.ts otherIncome) — те же, что у строк под «Подробнее». */
 const INCOME_KEYS: Record<IncomeId, TextKey> = {
   rent: 'tenant.summary',
+  yard: 'garden.summary',
   estate: 'estate.summary',
   branch: 'branch.summary',
   home: 'zar.summary.home',

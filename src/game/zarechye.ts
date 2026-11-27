@@ -30,7 +30,6 @@ export { homeLevel, inZar, ZAR_LEVEL_COST, ZAR_MAX_LEVEL, zarBillShare, zarAwayB
 import type { ZarRegularId } from './regulars';
 import { ensurePlan } from './day';
 import { ungouged } from './crisis';
-import { cancelTrip } from './van';
 
 export type Where = 'home' | 'zar';
 
@@ -216,8 +215,6 @@ export function zarShop(state: StoreState): StoreState | null {
 export function switchDistrict(state: StoreState, where: Where): StoreState {
   const zar = state.zar;
   if (!zar || zar.at === where) return state;
-  // Кузов фургона грузили со склада Центра (van.ts): уезжаем в Заречье — товар назад на склад, выезда нет.
-  if (where === 'zar') state = cancelTrip(state);
   const away = pick(state);
   const next = withSlice(state, zar.away);
   return { ...next, zar: { ...zar, at: where, away } };

@@ -52,6 +52,7 @@ import {
   upgradeCost,
   upgradeShelf,
   warehouseCapacity,
+  levelWarehouse,
   warehouseCount,
   warehouseOf,
   cashierScan,
@@ -261,18 +262,18 @@ import { leagueBox, leaguePlace } from './league';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toast, unfold, who } from './dom';
-import { gardenBox, harvestNow } from './garden';
-import { gardenRipe, hasGarden } from '../game/garden';
+import { gardenBox, gardenSummary } from './garden';
+import { hasGarden } from '../game/garden';
 import { tenantsBox, tenantsSummary } from './tenants';
 import { pawnLines, pawnOfferBox } from './pawnshop';
 import { pawnMet, pawnOffer } from '../game/pawnshop';
-import { rentalAlert, rentalBox, rentalStatus, restockButton } from './rental';
-import { KIT_ICON, RENTAL_CAP, kitToday, rentalOf, rentalOpen } from '../game/rental';
+import { rentalBox, rentalStatus } from './rental';
+import { KIT_ICON, kitToday, rentalOpen } from '../game/rental';
 import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
 import { lotteryNews } from '../game/lottery';
-import { vanBox, vanIdle, vanLines, vanNewsBox, vanStatus, vanToday } from './van';
-import { vanEventName } from './vanText';
-import { vanNews, vanOpen, VAN_EVENTS } from '../game/van';
+import { vanBox, vanLines, vanStatus } from './van';
+import { vanOpen } from '../game/van';
+import { clothesMorning, clothesToday } from '../game/clothes';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, TENANTS, tenantSay, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
@@ -706,6 +707,15 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   /** «Закупать сам»: утром жмёт «Закупить нужное» за игрока (без брака), купленное — сразу на полки. */
   const autoBuy = (state: StoreState): StoreState => shelveAll(autoMorning(state, priceFor(state), guestsToday(state)));
   if (autoActive(getState())) setState(autoBuy(getState()));
+  /** Одежда наверху завозится сама (game/clothes.ts clothesMorning, 27.11): после зала, на деньги сверх счетов. */
+  const fillRacks = (): void => {
+    const before = getState();
+    const after = clothesMorning(before);
+    if (after === before) return;
+    setState(after);
+    track('clothes_auto', after.day, before.money - after.money);
+  };
+  fillRacks();
 
   /**
    * Подсказка «что дальше» (game/nudge.ts): игрок застыл в меню, а важное не сделано — мягко светится
@@ -892,7 +902,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('careerLeft', state.career?.left);
     add('arc', !zarHere && arcToday(state));
     add('echo', !zarHere && echoNews(state));
-    add('van', !zarHere && vanNews(state));
     const picked = pickNews(state, ready);
     // Первого гостя ломбарда показали — дальше он приходит как все, даже без ответа (game/pawnshop.ts pawnMet).
     const met = picked.id === 'pawn' ? pawnMet(picked.state) : picked.state;
@@ -1099,7 +1108,16 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...(touring ? [] : mailBox(state, getState, mailUpdate, render)),
       ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
-      ...(touring ? [] : zarSwitchBox(state, (where) => update(switchToday(getState(), where)))),
+      ...(touring
+        ? []
+        : zarSwitchBox(state, (where) => {
+            const moved = switchToday(getState(), where);
+            // Утро открылось в Заречье - там этажа нет, и одежду Центра не завезли: завоз после переезда (докупит
+            // только недостающее; в Заречье clothesMorning ничего не делает).
+            const filled = clothesMorning(moved);
+            if (filled !== moved) track('clothes_auto', filled.day, moved.money - filled.money);
+            update(filled);
+          })),
       ...(touring ? [] : liveBox(state)),
       ...(touring ? [] : weekBox(state, guestsToday(state))),
       // «Дело недели» (game/cases.ts): строчка с уликами и доской — каждое утро недели, кроме того, когда
@@ -1202,8 +1220,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     // В «Зале» утром делать нечего: уценка теперь вечером сама, сломанных холодильников больше нет (02.11).
     const hall = 0;
     const rack = rackOf(state);
-    // Фудкорт ждёт ответа (праздник или жалоба) — точка на «Уголках»: без ответа жалоба закрывает точку
-    // на вечер, и игрок должен увидеть выбор, не открывая вкладку (13.11).
+    // Фудкорт ждёт ответа на праздник — точка на «Уголках» (13.11). Жалоба с 27.11 решается сама (точка
+    // закрыта на вечер, строка в итогах дня) — о ней не зовём.
     const extras =
       (state.cat && !fedToday(state) ? 1 : 0) +
       (rack.stock <= rackCapacity(state) / 3 && rack.stock < rackCapacity(state) ? 1 : 0) +
@@ -2164,8 +2182,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       // Серая схема (game/grey.ts): Жора с предложением мимо закона.
       case 'grey':
         return greyOfferBox(state, getState, update);
-      case 'van':
-        return vanNewsBox(state, getState, update);
       case 'arc':
         return arcBox(state, getState, update);
       case 'echo':
@@ -2418,9 +2434,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...(foodcourtOf(state)
         ? [{ id: 'foodcourt', icon: 'assets/fc_pizza.png', title: t('floor.third'), status: foodcourtStatus(state), alert: foodcourtAlert(state), details: () => foodcourtBox(getState(), getState, update) }]
         : []),
-      // Прокат у входа (game/rental.ts, 13.11): плитка — когда стойку можно поставить или она уже стоит.
+      // Прокат у входа (game/rental.ts, 13.11): плитка — когда стойку можно поставить или она уже стоит; на ней - сколько
+      // стойка принесёт сегодня (27.11), делать с ней ничего не надо.
       ...(rentalOpen(state) || state.rental
-        ? [{ id: 'rental', icon: KIT_ICON[kitToday(state)], title: t('rental.title'), status: rentalStatus(state), alert: rentalAlert(state), details: () => [rentalBox(getState(), getState, update)] }]
+        ? [{ id: 'rental', icon: KIT_ICON[kitToday(state)], title: t('rental.title'), status: rentalStatus(state), alert: false, details: () => [rentalBox(getState(), getState, update)] }]
         : []),
       {
         id: 'cat',
@@ -2446,13 +2463,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
               icon: 'assets/shop_van.png',
               title: t('van.title'),
               status: vanStatus(state),
-              alert: vanIdle(state),
-              details: () =>
-                vanBox(getState(), getState, update, () => {
-                  tab = 'buy';
-                  slideTab = true;
-                  render();
-                }),
+              details: () => vanBox(getState(), getState, update),
             },
           ]
         : []),
@@ -3866,21 +3877,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         }, 'ui-chip'),
       );
     }
-    // Сегодня есть куда выехать, а фургон пуст — к его плитке в «Уголках» (game/van.ts).
-    const vanEvent = vanToday(state);
-    if (vanEvent && vanIdle(state)) {
-      row(
-        t('van.todo', { icon: VAN_EVENTS[vanEvent].icon, name: vanEventName(state, vanEvent) }),
-        button(t('van.todoBtn'), () => {
-          tab = 'extras';
-          openCorner = 'van';
-          slideTab = true;
-          render();
-        }, 'ui-chip'),
-      );
-    }
-    // Теплица: урожай созрел — собрать прямо отсюда (game/garden.ts).
-    if (gardenRipe(state, Date.now())) row(`🌱 ${t('garden.ripe')}`, button(t('garden.harvest'), () => harvestNow(getState, update), 'ui-chip'));
     if (state.cat && !fedToday(state)) {
       row(t('todo.cat', { name: state.cat.name }), button(t('todo.catBtn', { n: FEED_COST }), () => update(feedCat(getState()), 'success'), 'ui-chip', state.money < FEED_COST));
     }
@@ -3889,9 +3885,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     if (rack.stock <= rackCapacity(state) / 3 && rackFree > 0) {
       row(t('todo.rack', { n: rack.stock }), button(t('todo.rackBtn', { n: rackFree * CANDY_COST }), () => update(refillRack(getState(), rackFree), 'success'), 'ui-chip', state.money < rackFree * CANDY_COST));
     }
-    // Прокат: вещи пропали (не вернули) — докупить, иначе стойка беднеет (game/rental.ts).
-    const rentRefill = restockButton(state, getState, update);
-    if (rentRefill) row(t('todo.rental', { n: rentalOf(state)?.stock ?? 0, max: RENTAL_CAP }), rentRefill);
     if (hasUpgrade(state, 'coffee') && cupsOf(state) < 8) {
       const n = CUPS_MAX - cupsOf(state);
       row(t('todo.cups', { n: cupsOf(state) }), button(t('todo.cupsBtn', { n, cost: n * CUP_COST }), () => update(buyCups(getState(), n), 'success'), 'ui-chip', state.money < n * CUP_COST));
@@ -3908,12 +3901,16 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     return box;
   };
 
-  /** Строка сводки утра: что «Закупать сам» уже купил. */
+  /** Строка сводки утра: что утром закупили сами — зал («Закупать сам») и одежда наверху (clothesMorning), одной строкой. */
   const autoLine = (): HTMLElement[] => {
     const state = getState();
     const today = state.autoOrder?.today;
-    if (!autoActive(state) || today?.day !== state.day || !today.lines.length) return [];
-    return [el('div', 'ui-muted', t('auto.delivered', { list: today.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' '), cost: today.spent }))];
+    const parts: string[] = [];
+    if (autoActive(state) && today?.day === state.day && today.lines.length)
+      parts.push(t('auto.morningHall', { list: today.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' '), cost: today.spent }));
+    const clothes = clothesToday(state);
+    if (clothes) parts.push(t('auto.morningClothes', { n: clothes.n, cost: clothes.spent }));
+    return parts.length ? [el('div', 'ui-muted', t('auto.morning', { list: parts.join(', ') }))] : [];
   };
 
   const fairLine = (state: StoreState): HTMLElement[] => {
@@ -4515,7 +4512,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const current = el('div', 'ui-box');
     current.append(
       el('b', '', t('store.current', { name: t(level.nameKey) })),
-      el('div', 'ui-muted', t('store.stats', { slots: level.slots, wh: level.warehouse, r: registerCount(state), g: level.guests })),
+      el('div', 'ui-muted', t('store.stats', { slots: level.slots, wh: warehouseCapacity(state), r: registerCount(state), g: level.guests })),
     );
     const reviews = state.reviews?.length ? [button(t('review.title'), () => showReviews(getState().reviews), 'ui-btn secondary')] : [];
     out.push(current, button(t('report.button'), () => showReport(getState()), 'ui-btn secondary'), ...reviews);
@@ -4555,14 +4552,14 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         grow.append(
           el('b', '', `🏬 ${t('hyper.title')}`),
           hyperArt(false),
-          el('div', '', t('hyper.offer', { slots: next.slots, wh: next.warehouse, g: next.guests, rent: next.rent })),
+          el('div', '', t('hyper.offer', { slots: next.slots, wh: levelWarehouse(state, next), g: next.guests, rent: next.rent })),
           // Не в «?»: что станет со старым магазином — главное в этой карточке.
           el('div', '', t('hyper.branch', { name: branchSignName(state, t('branch.defaultName')) })),
         );
       } else {
         grow.append(
           el('b', '', t('store.next', { name: t(next.nameKey) })),
-          el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: next.warehouse, r: nextRegisterCount(state) ?? registerSlots(state), g: next.guests, rent: next.rent })),
+          el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: levelWarehouse(state, next), r: nextRegisterCount(state) ?? registerSlots(state), g: next.guests, rent: next.rent })),
         );
       }
       if (state.debt > 0) grow.append(el('div', 'ui-note', t('store.needNoDebt')));
@@ -4605,7 +4602,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       fold('gear', gearBox(state)),
       fold('ads', adsBox(state)),
       decorBox(state),
-      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, tenantsSummary(state))), ...(dreams ? [foldSection('grow:dreams', dreams.box, dreams.summary)] : []), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...licenseBox(state, getState, update).map((b) => foldSection('grow:license', b)), ...floorsBox(state, getState, update).map((b) => foldSection('grow:floors', b, floorsSummary(state))), ...estateBox(state, getState, update).map((b) => foldSection('grow:estate', b, estateSummary(state))), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
+      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b, gardenSummary(state)) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, tenantsSummary(state))), ...(dreams ? [foldSection('grow:dreams', dreams.box, dreams.summary)] : []), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...licenseBox(state, getState, update).map((b) => foldSection('grow:license', b)), ...floorsBox(state, getState, update).map((b) => foldSection('grow:floors', b, floorsSummary(state))), ...estateBox(state, getState, update).map((b) => foldSection('grow:estate', b, estateSummary(state))), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {

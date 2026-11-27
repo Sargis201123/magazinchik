@@ -2,15 +2,17 @@
 // Фургон магазина продаёт там, где сегодня людно: матч на стадионе (свой, если он уже построен, иначе — в
 // соседнем районе), дачи в выходные, пляж в жару, свадьба в соседнем районе. Каждое событие хочет своё: на
 // матч — воду, сок, мороженое и выпечку, на дачи — мясо на шашлык, хлеб и картошку, на свадьбу — торт и
-// цветы. Пиво и сигареты на матч и на дачи — только с лицензией (license.ts). Грузят утром из магазина (сначала склад, потом полки) — этот товар
-// весь день не в зале. Вечером фургон возвращается: продал по цене выезда (дороже обычной), остаток — на
-// склад; мясо, молочное и мороженое весь день без холодильника, а свежая выпечка черствеет — часть может
-// испортиться. В дороге бывает всякое: пробка, щедрый покупатель, дождь на пляже, спустило колесо.
+// цветы. Пиво и сигареты на матч и на дачи — только с лицензией (license.ts).
+// 27.11, автор: «игрок заходит в уголки, собирает фургон и отправляет — не нужно так». Теперь фургон ездит сам:
+// купил один раз — в каждый день события он сам уезжает на самое выгодное из них. Груз «свой»: товар под выезд
+// он берёт у поставщика по закупочной цене, мимо полок и склада, — зал и склад фургон больше не трогает, грузить
+// и выбирать нечего. Вечером в кассу — выручка по цене выезда за вычетом товара и бензина. В дороге бывает
+// всякое: пробка, щедрый покупатель, дождь на пляже, спустило колесо — это строка в итогах дня.
 // Всё решают зерно магазина и номер дня (без общего генератора): итог честный и не переигрывается.
 
 import { yearTime } from './calendar';
 import { MATCH_EVERY, buildingWorks } from './district';
-import { MONTH_DAYS, PRODUCTS, restricted, unitLife, warehouseCapacity, warehouseCount, type ProductId, type Stock, type StoreState, type Unit } from './economy';
+import { MONTH_DAYS, PRODUCTS, restricted, sellableProducts, warehouseCapacity, warehouseCount, type ProductId, type Stock, type StoreState, type Unit } from './economy';
 import { weatherToday } from './crisis';
 import { hasLicense } from './license';
 import { rng } from './random';
@@ -62,43 +64,40 @@ export const VAN_REPAIR = 120;
 export const VAN_TIP = 0.15;
 export const VAN_TIP_MIN = 40;
 
-export interface VanTrip {
-  day: number;
-  event: VanEventId;
-  /** Что в кузове: штуки со своим возрастом (самые старые — в начале). */
-  load: Stock;
-}
-
 export interface VanResult {
   day: number;
   event: VanEventId;
   /** Продано штук и на сколько (по цене выезда). */
   sold: number;
   revenue: number;
-  /** Привёз назад на склад и сколько испортилось в дороге. */
-  back: number;
-  spoiled: number;
+  /** Проданный товар по закупочной цене (27.11: груз фургон берёт сам, у поставщика). В итогах до 27.11 — нет. */
+  goods?: number;
   incident?: VanIncident;
   /** Чаевые щедрого покупателя или ремонт колеса (со знаком). */
   extra: number;
   fuel: number;
-  /** Чистыми в кассу: выручка ± случай − бензин. */
+  /** Чистыми в кассу: выручка − товар ± случай − бензин. */
   net: number;
-  /** Утреннюю новость о случае в дороге уже прочли (headlines.ts, 'van'). */
+  /**
+   * Только для отката и старого кэша клиента (код до 27.11, ui/van.ts resultTable): без них старая карточка писала
+   * «NaN шт.» и «{n} шт.», а случай в дороге второй раз выходил утренней новостью. Новый код их не читает - убрать
+   * в следующем выпуске.
+   */
+  back?: number;
+  spoiled?: number;
   seen?: boolean;
 }
 
 export interface VanState {
   /** С какого дня фургон у магазина. */
   since: number;
-  /** Сегодняшний выезд: куда и что в кузове. */
-  trip?: VanTrip;
-  /** Итог последнего выезда — для утренней карточки и строки «Вчера» у фургона. */
+  /** Итог последнего выезда — для плитки фургона в «Уголках». */
   last?: VanResult;
   /** Выездов и чистыми за всё время. */
   trips?: number;
   earned?: number;
-  /** В этот день игрок сказал «Не едем»: плитка и «Главное на сегодня» больше не просят загрузить кузов. */
+  /** До 27.11: утром загруженный кузов и «Не едем». Сохранение со старым кузовом разгружает migrateVan. */
+  trip?: { day: number; event: VanEventId; load: Stock };
   skip?: number;
 }
 
@@ -131,6 +130,8 @@ export const nearMatch = (state: StoreState): boolean => buildingWorks(state, 's
 export const vanFuel = (state: StoreState, id: VanEventId): number => (id === 'match' && nearMatch(state) ? VAN_FUEL_NEAR : VAN_EVENTS[id].fuel);
 /** Цена штуки на выезде. */
 export const vanPrice = (id: ProductId, event: VanEventId): number => Math.round(PRODUCTS[id].basePrice * VAN_EVENTS[event].markup);
+/** Сколько фургон зарабатывает на штуке: цена выезда минус закупочная (товар он берёт у поставщика сам). */
+export const vanMargin = (id: ProductId, event: VanEventId): number => vanPrice(id, event) - PRODUCTS[id].cost;
 
 /** Ближайший день с выездом (не сегодня) — для строки «ближайший через N дн.». */
 export function nextVanEvent(state: StoreState): { id: VanEventId; days: number } | null {
@@ -141,190 +142,91 @@ export function nextVanEvent(state: StoreState): { id: VanEventId; days: number 
   return null;
 }
 
-/** Выезд в календаре фургона: день, куда и сколько штук там обычно разбирают (без погоды и случая). */
-export interface VanPlan {
-  day: number;
-  event: VanEventId;
-  demand: number;
-}
-
-/** Сколько штук всего разбирают на событии в обычный день (пиво и сигареты — только с лицензией). */
-export const vanDemand = (state: StoreState, event: VanEventId): number =>
-  (Object.entries(VAN_EVENTS[event].wants) as [ProductId, number][]).reduce((sum, [id, n]) => sum + (restricted(id) && !hasLicense(state) ? 0 : n), 0);
+/**
+ * Сколько штук товара обычно разбирают на этом событии в этот день (без толпы и случая): пиво и сигареты —
+ * только с лицензией, в непогоду берут меньше.
+ */
+export const vanWant = (state: StoreState, event: VanEventId, id: ProductId, day = state.day): number =>
+  restricted(id) && !hasLicense(state) ? 0 : Math.floor((VAN_EVENTS[event].wants[id] ?? 0) * Math.min(1, weatherDemand(weatherOn(state, day), id)));
 
 /**
- * 15.11, автор: «непонятно, когда он едет». Ближайшие выезды — с сегодняшнего дня, не больше n штук и не дальше
- * horizon дней: календарь в карточке фургона. Пляж дальше сегодняшнего дня — по прогнозу погоды.
+ * Груз выезда: товары магазина (что он сам продаёт в этот день), которые берут на событии, — каждого сколько обычно
+ * разбирают, самые ходовые первыми, пока есть место в кузове. Груз фургон берёт сам: полки и склад не трогает.
  */
-export function vanCalendar(state: StoreState, n = 4, horizon = 14): VanPlan[] {
-  const out: VanPlan[] = [];
-  for (let d = 0; d <= horizon && out.length < n; d++) {
-    for (const event of vanEvents(state, state.day + d)) if (out.length < n) out.push({ day: state.day + d, event, demand: vanDemand(state, event) });
+export function vanCargo(state: StoreState, event: VanEventId, day = state.day): { id: ProductId; n: number }[] {
+  const sells = sellableProducts(day === state.day ? state : { ...state, day });
+  const ids = (Object.keys(VAN_EVENTS[event].wants) as ProductId[]).filter((id) => sells.includes(id) && vanWant(state, event, id, day) > 0);
+  ids.sort((a, b) => vanWant(state, event, b, day) - vanWant(state, event, a, day));
+  const out: { id: ProductId; n: number }[] = [];
+  let room = VAN_CAP;
+  for (const id of ids) {
+    const n = Math.min(room, vanWant(state, event, id, day));
+    if (n <= 0) break;
+    out.push({ id, n });
+    room -= n;
   }
   return out;
 }
 
-/** Сколько штук было в кузове на выезде: продано, привезено и испортилось. */
-export const vanTaken = (r: VanResult): number => r.sold + r.back + r.spoiled;
+/** Сколько обычно приносит выезд чистыми (без толпы и случая в дороге): по этой цифре фургон и выбирает, куда ехать. */
+export const vanGain = (state: StoreState, event: VanEventId, day = state.day): number =>
+  vanCargo(state, event, day).reduce((sum, { id, n }) => sum + n * vanMargin(id, event), 0) - vanFuel(state, event);
 
-// ---------- Фургон и кузов ----------
+/**
+ * Худшая толпа (vanCrowd от 0,8) без случая в дороге: выезд, который при ней не окупает бензин, не едет - иначе в
+ * шторм на матч с одним мороженым фургон уезжал и возвращался в минус без понятной причины.
+ */
+const vanFloorGain = (state: StoreState, event: VanEventId, day: number): number =>
+  vanCargo(state, event, day).reduce((sum, { id, n }) => sum + Math.floor(n * 0.8) * vanMargin(id, event), 0) - vanFuel(state, event);
 
 /** Можно купить фургон: минимаркет и больше, в Центре (в Заречье — своя лавка без фургона). */
 export const vanOpen = (state: StoreState): boolean => state.level >= VAN_LEVEL && !inZar(state);
+
+/**
+ * Куда фургон едет в этот день (по умолчанию — сегодня): самое выгодное из событий дня. null — фургона нет, мы в
+ * Заречье (фургон ждёт возвращения в Центр), выездов нет или везти нечего.
+ */
+export function vanTripOn(state: StoreState, day = state.day): VanEventId | null {
+  if (!state.van || !vanOpen(state)) return null;
+  let best: VanEventId | null = null;
+  let gain = 0;
+  for (const id of vanEvents(state, day)) {
+    const g = vanGain(state, id, day);
+    if (g > gain && vanFloorGain(state, id, day) > 0) [best, gain] = [id, g];
+  }
+  return best;
+}
+
+/** Выезд в календаре фургона: день, куда и сколько он там обычно зарабатывает. */
+export interface VanPlan {
+  day: number;
+  event: VanEventId;
+  gain: number;
+}
+
+/**
+ * 15.11, автор: «непонятно, когда он едет». Ближайшие выезды — с сегодняшнего дня, не больше n штук и не дальше
+ * horizon дней: календарь в карточке фургона. В день — один выезд (самый выгодный). Пляж дальше сегодняшнего дня —
+ * по прогнозу погоды.
+ */
+export function vanCalendar(state: StoreState, n = 4, horizon = 14): VanPlan[] {
+  const out: VanPlan[] = [];
+  for (let d = 0; d <= horizon && out.length < n; d++) {
+    const day = state.day + d;
+    const event = vanTripOn(state, day);
+    if (event) out.push({ day, event, gain: vanGain(state, event, day) });
+  }
+  return out;
+}
 
 export function buyVan(state: StoreState): StoreState | null {
   if (state.van || !vanOpen(state) || state.money < VAN_PRICE) return null;
   return { ...state, money: state.money - VAN_PRICE, van: { since: state.day } };
 }
 
-const count = (stock: Stock): number => Object.values(stock).reduce((sum, units) => sum + (units?.length ?? 0), 0);
-/** Сегодняшний выезд (вчерашний, не разобранный ночью, — не сегодняшний). */
-export const tripToday = (state: StoreState): VanTrip | null => (state.van?.trip?.day === state.day ? state.van.trip : null);
-export const vanLoaded = (state: StoreState): number => count(tripToday(state)?.load ?? {});
-export const loadedOf = (state: StoreState, id: ProductId): number => tripToday(state)?.load[id]?.length ?? 0;
-/** Фургон сегодня уезжает: есть куда и есть что везти. */
-export const vanGoes = (state: StoreState): boolean => vanLoaded(state) > 0;
-
-/** Сколько штук товара сейчас в магазине (склад и полки) — то, что можно погрузить. */
-export const inStore = (state: StoreState, id: ProductId): number =>
-  (state.warehouse[id] ?? []).filter((u) => !u.pending).length + state.shelves.reduce((sum, s) => sum + (s.items[id]?.length ?? 0), 0);
-
-/** Самые старые — первыми: и в кузове, и на складе так и лежат. */
-const byAge = (units: Unit[]): Unit[] => [...units].sort((a, b) => b.age - a.age);
-
-/** Выбрать, куда едем сегодня (кузов остаётся загруженным). null — фургона нет или туда сегодня не едут. */
-export function planTrip(state: StoreState, event: VanEventId): StoreState | null {
-  if (!state.van || !vanOpen(state) || !vanEvents(state).includes(event)) return null;
-  // Кузов с прошлого дня (ночь не дошла: закрыли игру посреди дня) — сначала на склад, иначе товар пропал бы.
-  const base = state.van.trip && !tripToday(state) ? cancelTrip(state) : state;
-  const trip = tripToday(base);
-  const { skip: _skip, ...van } = base.van!;
-  return { ...base, van: { ...van, trip: { day: base.day, event, load: trip?.load ?? {} } } };
-}
-
-/**
- * Сколько мест склада свободно под товар с полок. Кузов держит места на складе (economy.ts warehouseCount):
- * со склада грузить можно всегда, а с полок — только пока вечером остатку есть куда вернуться.
- */
-const shelfRoom = (state: StoreState): number => Math.max(0, warehouseCapacity(state) - warehouseCount(state));
-
-/** Сколько штук товара можно погрузить прямо сейчас: склад целиком, с полок — сколько вернётся на склад. */
-export const vanTakeable = (state: StoreState, id: ProductId): number =>
-  (state.warehouse[id] ?? []).filter((u) => !u.pending).length +
-  Math.min(shelfRoom(state), state.shelves.reduce((sum, s) => sum + (s.items[id]?.length ?? 0), 0));
-
-/**
- * Погрузить до n штук товара: сначала со склада, потом с полок, самые старые — первыми (в зале остаётся
- * свежее). Не больше места в кузове. null — некуда или нечего.
- */
-export function loadVan(state: StoreState, id: ProductId, n: number): StoreState | null {
-  const trip = tripToday(state);
-  const room = Math.min(n, VAN_CAP - vanLoaded(state));
-  if (!state.van || !trip || room <= 0) return null;
-  const taken: Unit[] = [];
-  // Склад: брак, по которому ещё не решили, не трогаем.
-  const stored = state.warehouse[id] ?? [];
-  const keep: Unit[] = [];
-  for (const u of stored) {
-    if (taken.length < room && !u.pending) taken.push(u);
-    else keep.push(u);
-  }
-  let shelves = state.shelves;
-  // С полок — не больше свободных мест склада (со склада взятое места не меняет: кузов держит их же).
-  const fromShelves = Math.min(room - taken.length, shelfRoom(state));
-  if (fromShelves > 0) {
-    const limit = taken.length + fromShelves;
-    shelves = state.shelves.map((s) => {
-      const units = s.items[id];
-      if (!units?.length || taken.length >= limit) return s;
-      const k = Math.min(units.length, limit - taken.length);
-      taken.push(...units.slice(0, k));
-      return { ...s, items: { ...s.items, [id]: units.slice(k) } };
-    });
-  }
-  if (!taken.length) return null;
-  const load = { ...trip.load, [id]: byAge([...(trip.load[id] ?? []), ...taken]) };
-  const warehouse = stored.length ? { ...state.warehouse, [id]: keep } : state.warehouse;
-  return { ...state, warehouse, shelves, van: { ...state.van, trip: { ...trip, load } } };
-}
-
-/** Вернуть из кузова на склад n штук товара (или всё, если товар не указан; и из не разобранного вчерашнего выезда). */
-export function unloadVan(state: StoreState, id?: ProductId, n = Infinity): StoreState {
-  const trip = state.van?.trip;
-  if (!state.van || !trip) return state;
-  const warehouse = { ...state.warehouse };
-  const load = { ...trip.load };
-  for (const pid of id ? [id] : (Object.keys(load) as ProductId[])) {
-    const units = load[pid] ?? [];
-    // Назад — самые свежие: старые пусть едут продаваться.
-    const k = Math.min(units.length, n);
-    if (!k) continue;
-    warehouse[pid] = byAge([...(warehouse[pid] ?? []), ...units.slice(units.length - k)]);
-    load[pid] = units.slice(0, units.length - k);
-  }
-  return { ...state, warehouse, van: { ...state.van, trip: { ...trip, load } } };
-}
-
-/** Кузов — на склад, выезд отменён (ночью, перед Заречьем, перед новым выбором). */
-export function cancelTrip(state: StoreState): StoreState {
-  if (!state.van?.trip) return state;
-  const back = unloadVan(state);
-  const { trip: _trip, ...van } = back.van!;
-  return { ...back, van };
-}
-
-/** «Не едем» на плитке: выезд отменён, и до завтра фургон больше не напоминает о себе. */
-export function skipTrip(state: StoreState): StoreState {
-  if (!state.van) return state;
-  const next = cancelTrip(state);
-  return { ...next, van: { ...next.van!, skip: state.day } };
-}
-
-/**
- * Сегодня есть куда ехать, кузов пуст, игрок не отказался и грузить есть что — плитка и строка
- * «Главное на сегодня» просят внимания. Отказ («Не едем») или пустой магазин — не просим (attention.ts:
- * лишнее касание каждое второе утро раздражает).
- */
-export const vanIdle = (state: StoreState): boolean =>
-  Boolean(state.van) && state.van?.skip !== state.day && !vanLoaded(state) && vanEvents(state).some((e) => vanGoods(state, e).length > 0);
-
-/** Сколько штук товара обычно разбирают на этом событии (без толпы и случая) — подсказка при погрузке. */
-export const vanWant = (state: StoreState, event: VanEventId, id: ProductId): number =>
-  restricted(id) && !hasLicense(state) ? 0 : Math.floor((VAN_EVENTS[event].wants[id] ?? 0) * Math.min(1, weatherDemand(weatherToday(state), id)));
-
-/** Что берут на событии — для строки «Берут: …» (пиво и сигареты — только с лицензией). */
-export const vanWanted = (state: StoreState, event: VanEventId): ProductId[] =>
-  (Object.keys(VAN_EVENTS[event].wants) as ProductId[]).filter((id) => !restricted(id) || hasLicense(state));
-
-/** Новость утра (headlines.ts): вчера в дороге что-то случилось, и её ещё не прочли. */
-export const vanNews = (state: StoreState): VanResult | null => {
-  const last = state.van?.last;
-  return last?.incident && !last.seen && state.day - last.day <= 3 ? last : null;
-};
-export const seeVanNews = (state: StoreState): StoreState =>
-  vanNews(state) ? { ...state, van: { ...state.van!, last: { ...state.van!.last!, seen: true } } } : state;
-
-/** Товары события, которые сейчас вообще можно погрузить или уже в кузове, — по спросу. */
-export const vanGoods = (state: StoreState, event: VanEventId): ProductId[] =>
-  (Object.keys(VAN_EVENTS[event].wants) as ProductId[])
-    .filter((id) => vanWant(state, event, id) > 0 && (inStore(state, id) > 0 || loadedOf(state, id) > 0))
-    .sort((a, b) => vanWant(state, event, b) - vanWant(state, event, a));
-
-/** «Загрузить под событие»: каждого товара — сколько обычно разбирают, из того, что есть, пока есть место. */
-export function autoLoad(state: StoreState): StoreState {
-  const trip = tripToday(state);
-  if (!trip) return state;
-  let next = state;
-  for (const id of vanGoods(state, trip.event)) {
-    const need = vanWant(next, trip.event, id) - loadedOf(next, id);
-    if (need > 0) next = loadVan(next, id, need) ?? next;
-  }
-  return next;
-}
-
 // ---------- Вечер ----------
 
-/** Случай в дороге сегодня (одинаковый, сколько ни грузи, — от зерна и дня). */
+/** Случай в дороге сегодня (одинаковый в любой момент дня — от зерна и дня). */
 export function vanIncident(state: StoreState, event: VanEventId): VanIncident | undefined {
   let r = roll(state, state.day, 23)();
   const order: VanIncident[] = event === 'beach' ? ['rain', 'jam', 'wheel', 'generous'] : ['jam', 'wheel', 'generous'];
@@ -339,64 +241,61 @@ export function vanIncident(state: StoreState, event: VanEventId): VanIncident |
 export const vanCrowd = (state: StoreState): number => 0.8 + 0.4 * roll(state, state.day, 31)();
 
 /**
- * Без холодильника весь день: мясо, молочное, мороженое и заморозка стареют на два дня, прочий скоропорт —
- * на день, вода, сок и порошок — нисколько.
+ * Итог сегодняшнего выезда — чистый расчёт: сцена показывает его, когда фургон вернулся, ночь — зачисляет.
+ * Продано — сколько разобрали (толпа и случай в дороге), но не больше груза; товар — проданное по закупочной цене.
  */
-export const vanAging = (id: ProductId): number => {
-  const p = PRODUCTS[id];
-  if (!Number.isFinite(p.shelfLife)) return 0;
-  return ['meat', 'dairy', 'icebox', 'frozen'].includes(p.category) ? 2 : p.shelfLife <= 7 ? 1 : 0;
-};
-
-/** Итог сегодняшнего выезда — чистый расчёт: сцена показывает его, когда фургон вернулся, ночь — зачисляет. */
-export function vanOutcome(state: StoreState): (VanResult & { home: Stock }) | null {
-  const trip = tripToday(state);
-  if (!trip || !vanLoaded(state)) return null;
-  const incident = vanIncident(state, trip.event);
+export function vanOutcome(state: StoreState): VanResult | null {
+  const event = vanTripOn(state);
+  if (!event) return null;
+  const incident = vanIncident(state, event);
   const share = (incident ? VAN_INCIDENTS[incident].sales : 1) * vanCrowd(state);
   let sold = 0;
   let revenue = 0;
-  let back = 0;
-  let spoiled = 0;
-  const home: Stock = {};
-  for (const id of Object.keys(trip.load) as ProductId[]) {
-    const units = trip.load[id] ?? [];
-    if (!units.length) continue;
-    // Разбирают сначала самое старое (как и в зале); остальное едет назад и в дороге стареет.
-    const n = Math.min(units.length, Math.floor(vanWant(state, trip.event, id) * share));
-    sold += n;
-    revenue += n * vanPrice(id, trip.event);
-    const aged = units.slice(n).map((u) => ({ ...u, age: u.age + vanAging(id) }));
-    // Не доживёт и до утра (unitLife без холодильников) — списать сразу: в дороге испортилось.
-    const fresh = aged.filter((u) => u.age + 1 < unitLife(id, u));
-    spoiled += aged.length - fresh.length;
-    back += fresh.length;
-    if (fresh.length) home[id] = fresh;
+  let goods = 0;
+  for (const { id, n } of vanCargo(state, event)) {
+    const k = Math.min(n, Math.floor(vanWant(state, event, id) * share));
+    sold += k;
+    revenue += k * vanPrice(id, event);
+    goods += k * PRODUCTS[id].cost;
   }
   const extra = incident === 'wheel' ? -VAN_REPAIR : incident === 'generous' ? Math.max(VAN_TIP_MIN, Math.round((revenue * VAN_TIP) / 10) * 10) : 0;
-  const fuel = vanFuel(state, trip.event);
-  return { day: state.day, event: trip.event, sold, revenue, back, spoiled, incident, extra, fuel, net: revenue + extra - fuel, home };
+  const fuel = vanFuel(state, event);
+  return { day: state.day, event, sold, revenue, goods, incident, extra, fuel, net: revenue - goods + extra - fuel };
 }
 
-/**
- * Ночь (day.ts nightCycle, до смены дня): выручка выезда — в кассу, остаток — на склад, выезд закрыт.
- * Выезд не сегодняшний (сохранение посреди дня и т. п.) — товар просто возвращается, без продаж и бензина.
- */
-export function settleVan(state: StoreState): { state: StoreState; result: VanResult | null } {
+/** Ночь (day.ts nightCycle, до счетов): итог выезда — в кассу. Выезда сегодня не было — ничего не меняется. */
+export function settleVan(state: StoreState, day: StoreState = state): { state: StoreState; result: VanResult | null } {
   const van = state.van;
-  // В Заречье склад и полки — его, а кузов грузили в Центре: выезд подождёт возвращения (switchDistrict
-  // и так разгружает кузов перед отъездом — это на случай старого кузова).
-  if (!van?.trip || inZar(state)) return { state, result: null };
-  const outcome = vanOutcome(state);
-  if (!outcome) return { state: cancelTrip(state), result: null };
-  const { home, ...result } = outcome;
-  const warehouse = { ...state.warehouse };
-  for (const id of Object.keys(home) as ProductId[]) warehouse[id] = byAge([...(warehouse[id] ?? []), ...(home[id] ?? [])]);
-  const { trip: _trip, ...rest } = van;
+  // Итог считается по магазину дня (day - состояние до вечера): вечерняя проверка лицензии не меняет задним числом
+  // ни выезд, ни сумму, которую игрок уже видел над вернувшимся фургоном.
+  const result = van ? vanOutcome(day) : null;
+  if (!van || !result) return { state, result: null };
   // 14.11, аудит: колесо и бензин в неудачный выезд могли увести кассу в минус — нехватка уходит в долг, как у всех.
   const money = state.money + result.net;
   return {
-    state: { ...state, money: Math.max(0, money), debt: state.debt + Math.max(0, -money), warehouse, van: { ...rest, last: result, trips: (van.trips ?? 0) + 1, earned: (van.earned ?? 0) + result.net } },
+    state: { ...state, money: Math.max(0, money), debt: state.debt + Math.max(0, -money), van: { ...van, last: { ...result, back: 0, spoiled: 0, seen: true }, trips: (van.trips ?? 0) + 1, earned: (van.earned ?? 0) + result.net } },
     result,
   };
+}
+
+/**
+ * Сохранение до 27.11: утром загруженный кузов (груз с полок и склада) — назад на склад, сколько влезет; что не
+ * влезло, магазин продаёт по закупочной цене (в Заречье склад чужой — продаёт всё). «Не едем» тоже снимаем.
+ */
+export function migrateVan(state: StoreState): StoreState {
+  const van = state.van;
+  if (!van || (van.trip === undefined && van.skip === undefined)) return state;
+  const { trip, skip: _skip, ...rest } = van;
+  const warehouse = { ...state.warehouse };
+  let money = state.money;
+  let room = inZar(state) ? 0 : Math.max(0, warehouseCapacity(state) - warehouseCount(state));
+  for (const id of Object.keys(trip?.load ?? {}) as ProductId[]) {
+    if (!(id in PRODUCTS)) continue;
+    const units: Unit[] = trip?.load[id] ?? [];
+    const k = Math.min(room, units.length);
+    if (k) warehouse[id] = [...(warehouse[id] ?? []), ...units.slice(0, k)].sort((a, b) => b.age - a.age);
+    room -= k;
+    money += (units.length - k) * PRODUCTS[id].cost;
+  }
+  return { ...state, warehouse, money, van: rest };
 }

@@ -71,7 +71,7 @@ describe('POST /api/tester', () => {
     // Чужой номер, подпись другим токеном, испорченная подпись, пусто и мусор — нет.
     expect(await ask(env, { initData: await initData(7) })).toBe(false);
     expect(await ask(env, { initData: await initData(42, '999:other') })).toBe(false);
-    expect(await ask(env, { initData: (await initData(42)).replace(/hash=./, 'hash=0') })).toBe(false);
+    expect(await ask(env, { initData: (await initData(42)).replace(/hash=(.)/, (_, c: string) => `hash=${c === '0' ? '1' : '0'}`) })).toBe(false);
     expect(await ask(env, {})).toBe(false);
     expect(await ask(env, { initData: 42 })).toBe(false);
     expect((await tester(new Request('https://x/api/tester', { method: 'POST', body: '{oops' }), env)).status).toBe(200);

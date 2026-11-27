@@ -12,13 +12,13 @@ export const signed = (n: number): string => (n >= 0 ? `+${n}` : `−${-n}`);
 export const vanEventName = (state: StoreState, id: VanEventId): string =>
   t(id === 'match' && !nearMatch(state) ? 'van.ev.matchFar' : (`van.ev.${id}` as TextKey));
 
-/** Итог выезда одной строкой: продано, случай в дороге (incident), что привёз и что испортилось, бензин, итого. */
-export function vanResultText(r: VanResult, incident = true): string {
+/** Итог выезда одной строкой: продано, товар по закупке, бензин, итого (случай в дороге — своей строкой, vanRoadText). */
+export function vanResultText(r: VanResult): string {
   const parts = [t('van.sold', { icon: VAN_EVENTS[r.event].icon, n: r.sold, sum: r.revenue })];
-  // В утренней новости случай уже рассказан своими словами — строкой итога его не повторяем.
-  if (r.incident && incident) parts.push(t(`van.inc.${r.incident}` as TextKey, { n: Math.abs(r.extra) }));
-  if (r.back) parts.push(t('van.back', { n: r.back }));
-  if (r.spoiled) parts.push(t('van.spoiled', { n: r.spoiled }));
+  if (r.goods) parts.push(t('van.goods', { n: r.goods }));
   parts.push(t('van.fuel', { n: r.fuel }), t('van.net', { n: signed(r.net) }));
   return parts.join(' · ');
 }
+
+/** Случай в дороге (пробка, колесо, щедрый покупатель, дождь на пляже) — строкой в итогах дня; не было — null. */
+export const vanRoadText = (r: VanResult): string | null => (r.incident ? t(`van.inc.${r.incident}` as TextKey, { n: Math.abs(r.extra) }) : null);
