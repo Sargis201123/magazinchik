@@ -71,7 +71,7 @@ export const yardIncome = (state: StoreState): number => bedCount(state) * bedIn
  * купленные грядки и не видит NaN в таймерах (since 0 - «спело», урожай ему можно собрать). Новый код их не читает
  * (beds есть). Убрать since/harvests/more в следующем выпуске.
  */
-export const saveGarden = (beds: number, last?: GardenState['last'], total?: number): GardenState => ({
+const saveGarden = (beds: number, last?: GardenState['last'], total?: number): GardenState => ({
   beds,
   ...(last ? { last } : {}),
   ...(total ? { total } : {}),
