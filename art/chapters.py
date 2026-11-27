@@ -44,6 +44,18 @@ INK = C("k")
 WHITE = C("w")
 
 
+def M(a, b, t):
+    """Смесь двух букв палитры: промежуточный тон сцены без новых цветов в PALETTE."""
+    return mix(C(a), C(b), t)
+
+
+# Общие тона сцен - все из палитры (смеси двух букв).
+ICE = M("U", "w", 0.6)  # голубое стекло, холодный свет холодильника
+MIST = M("U", "w", 0.85)  # светлая голубизна у горизонта, тень облака
+BLUE_LIGHT = M("c", "W", 0.4)  # кромка холодильника, вода в ведре, капелька пота
+LAMP = M("Y", "w", 0.6)  # тёплый свет ламп
+
+
 # ---------------------------------------------------------------- приёмы
 
 
@@ -171,11 +183,50 @@ def layer(name, view, arms=""):
 
 
 FRONT_ONLY = {"badge", "tie", "glasses"}
+UNDER_HAT = {"cap", "beanie"}  # со спины под шапкой видны волосы - иначе пустой овал кожи, «манекен»
 
 
-def person(look, view="front", mood=None, walk=0):
+def bald_back(im, skin, hair):
+    """Лысина со спины: в мире венчик волос - светлая полоса с контуром сверху и точками ушей, на
+    картинке главы она читается как очки виртуальной реальности. Здесь венчик - тон между кожей и
+    волосами, без верхнего контура и без точек ушей."""
+    out = Image.new("RGBA", im.size)
+    src, dst = im.load(), out.load()
+    top = im.getbbox()[1]
+    fringe = shade(mix(C(skin), C(hair), 0.45), 0.85)
+    for y in range(im.height):
+        for x in range(im.width):
+            r, g, b, a = src[x, y]
+            if not a or y == top or (y == top + 1 and x % 2 == 0 and src[x, y - 1][3]):
+                continue
+            ink = (r, g, b) == INK[:3]
+            inner = 0 < x < im.width - 1 and src[x - 1, y][3] and src[x + 1, y][3] and src[x, y + 1][3]
+            if ink and inner:
+                dst[x, y] = shade(fringe, 0.9)
+            elif ink:
+                dst[x, y] = INK
+            else:
+                dst[x, y] = shade(fringe, (r + g + b) / 765)
+    return out
+
+
+def reach_arm(img, sleeve, skin):
+    """Вторая рука вытянута вперёд (вид боком вправо): рукав от груди и кисть - отдать или взять вещь.
+    Рисуется до зеркального разворота, поэтому годится и для вида влево."""
+    o = Canvas(40, 46)
+    for x in range(23, 28):
+        o.px(x, 28, sleeve)
+        o.px(x, 29, shade(sleeve, 0.8))
+    o.rect(28, 28, 2, 2, skin)
+    o.px(28, 29, shade(skin, 0.86))
+    o.outline("k")
+    img.alpha_composite(o.img)
+
+
+def person(look, view="front", mood=None, walk=0, reach=False):
     """Человечек 40×46 из слоёв мира (порядок как в src/scenes/persons.ts makePerson).
-    Ноги - на строке 42, середина - x 20. view: front, back, right, left; walk 1/2 - кадр шага."""
+    Ноги - на строке 42, середина - x 20. view: front, back, right, left; walk 1/2 - кадр шага;
+    reach - вторая рука вытянута вперёд (только боком)."""
     arms = ("", "_w1", "_w2")[walk]
     img = Image.new("RGBA", (40, 46))
 
@@ -183,6 +234,8 @@ def person(look, view="front", mood=None, walk=0):
         im = layer(name, view, arms if frames else "")
         if color is not None:
             im = multiply(im, C(color) if isinstance(color, str) else color)
+        if name == "p_hair_bald" and view == "back":
+            im = bald_back(layer(name, view), look["skin"], look.get("hair", "#4a2c1a"))
         img.alpha_composite(im, (0, 0) if big else (8, 8))
 
     add("p_legs1" if walk else "p_legs0", look.get("pants", "#3a4466"))
@@ -198,11 +251,29 @@ def person(look, view="front", mood=None, walk=0):
         add("w_face_" + look["face"], look.get("face_tint", look.get("hair")))
     if look.get("glasses") and view == "front":
         add("acc_glasses")
-    add("p_hair_" + look.get("style", "short"), look.get("hair", "#4a2c1a"))
+    style = look.get("style", "short")
+    if view == "back" and style in UNDER_HAT:
+        add("p_hair_short", look.get("under", "#3b2a35"))
+    add("p_hair_" + style, look.get("hair", "#4a2c1a"))
     if look.get("hat"):
         add("w_hat_" + look["hat"], look.get("hat_tint"), big=True)
+        if look.get("band"):
+            # Фуражка как на портрете: околыш в цвет тульи (в мире он красный), спереди оранжевая кокарда.
+            red = C("R")[:3]
+            px = img.load()
+            for y in range(img.height):
+                for x in range(img.width):
+                    if px[x, y][:3] == red and px[x, y][3]:
+                        px[x, y] = C(look["band"])
+            if view in ("right", "left"):
+                for x, y in ((23, 11), (24, 11), (23, 12), (24, 12)):
+                    px[x, y] = C("y") if (x, y) != (24, 12) else C("o")
+                px[22, 26] = C("y")
     if look.get("prop"):
         add("w_prop_" + look["prop"], look.get("prop_tint"), big=True)
+    if reach and view in ("right", "left"):
+        sleeve = img.getpixel((21, 28))
+        reach_arm(img, sleeve, C(look["skin"]))
     if view == "left":
         img = img.transpose(Image.FLIP_LEFT_RIGHT)
     return img
@@ -221,13 +292,13 @@ def rimmed(img, color, t, side=-1):
     return out
 
 
-def place(c, x, y, look, view="front", mood=None, walk=0, light=None, shadow=0.3, cast=None, rim=None, reflect=0):
+def place(c, x, y, look, view="front", mood=None, walk=0, light=None, shadow=0.3, cast=None, rim=None, reflect=0, reach=False):
     """Поставить человечка ногами в (x, y). light - (цвет, доля) общего света сцены;
     cast - длина косой тени вправо (низкое солнце); rim - (цвет, доля) контрового света слева;
-    reflect - отражение на мытом полу (доля)."""
+    reflect - отражение на мытом полу (доля); reach - рука вытянута вперёд (вид боком)."""
     if shadow:
         dark(c, x + (cast or 0) / 2, y, 8 + (cast or 0) / 2, 2, shadow)
-    img = person(look, view, mood, walk)
+    img = person(look, view, mood, walk, reach)
     if light:
         img = grade(img, *light)
     if rim:
@@ -258,14 +329,14 @@ CROWD = [
     ("#eec39a", "#63c74d", "#3a4466", "#c0cbdc", "bald"),
     ("#c28569", "#b55088", "#262b44", "#181425", "curly"),
     ("#f2d3ab", "#5fcde4", "#3a4466", "#8f563b", "cap"),
-    ("#eec39a", "#e43b44", "#262b44", "#4a2c1a", "beanie"),
+    ("#eec39a", "#e43b44", "#262b44", "#0099db", "beanie"),  # шапка из HAT_COLORS игры
     ("#d9a066", "#ead4aa", "#3a4466", "#3b2a35", "short"),
 ]
 
 
 def passer(i, **more):
     skin, shirt, pants, hair, style = CROWD[i % len(CROWD)]
-    return dict(skin=skin, shirt=shirt, pants=pants, hair=hair, style=style, **more)
+    return dict(skin=skin, shirt=shirt, pants=pants, hair=hair, style=style, under="#4a2c1a", **more)
 
 
 # ---------------------------------------------------------------- улица
@@ -690,22 +761,35 @@ def suitcase():
 
 
 def keys(c, x, y):
-    """Связка ключей с бликом - то, что бабушка передаёт внуку."""
-    c.ellipse(x, y, 2, 2, C("y"))
-    c.ellipse(x, y, 1, 1, (0, 0, 0, 0))
-    c.px(x, y, mix(c.get(x, y), C("y"), 0))
-    c.rect(x - 1, y + 2, 1, 5, C("Y"))
-    c.px(x - 2, y + 5, C("Y"))
-    c.px(x - 2, y + 7, C("Y"))
-    c.rect(x + 2, y + 1, 1, 4, C("W"))
-    c.px(x + 3, y + 4, C("W"))
-    c.px(x + 1, y - 3, WHITE)
-    c.px(x + 1, y - 5, WHITE)
-    c.px(x + 3, y - 4, WHITE)
-    c.px(x - 1, y - 4, WHITE)
+    """Связка ключей с бликом - то, что бабушка передаёт внуку. (x, y) - кольцо, за него держит рука;
+    два ключа висят вниз: золотой и серебряный, с бородками; над кольцом искорка."""
+    o = Canvas(9, 12)
+    o.ellipse(4, 2, 2.6, 2.4, C("y"))
+    o.px(4, 2, (0, 0, 0, 0))
+    o.px(3, 1, C("Y"))
+    # Золотой ключ: головка с дыркой, стержень, бородка вправо.
+    o.rect(1, 4, 3, 3, C("Y"))
+    o.px(2, 5, C("o"))
+    o.vline(2, 7, 5, C("Y"))
+    o.vline(3, 7, 5, C("y"))
+    o.px(4, 9, C("y"))
+    o.px(4, 11, C("y"))
+    # Серебряный ключ - чуть в сторону.
+    o.rect(5, 4, 3, 3, WHITE)
+    o.px(6, 5, C("l"))
+    o.vline(6, 7, 4, C("W"))
+    o.vline(7, 7, 4, C("l"))
+    o.px(5, 9, C("l"))
+    o = outlined(o)
+    put(c, o, x - 5, y - 3)
+    sparkle(c, x + 4, y - 5)
+    blend(c, x + 6, y - 8, WHITE, 0.6)
+    blend(c, x - 4, y - 6, WHITE, 0.5)
 
 
 def save(c, name):
+    # Картинка глав непрозрачна целиком: дырка в ней - фон окна диалога точкой посреди сцены.
+    assert c.img.getchannel("A").getextrema() == (255, 255), f"{name}: есть прозрачные пиксели"
     OUT.mkdir(parents=True, exist_ok=True)
     c.img.save(OUT / f"{name}.png")
 
@@ -717,7 +801,7 @@ def ch1():
     """Наследство. Рассвет: бабушкин ларёк на углу; бабушка с чемоданом отдаёт внуку ключи,
     её ждёт автобус на дачу с открытой дверью. Солнце встаёт слева - тени длинные, вправо."""
     c = Canvas(W, H)
-    sky(c, [C("K"), C("p"), C("P"), C("s"), C("o"), C("y")], 0, 122, 12)
+    sky(c, [C("K"), C("p"), C("P"), C("s"), C("o"), C("y")], 0, 124, 12)
     sun(c, 26, 94, 10, C("Y"), C("y"))
     cloud(c, 112, 40, 64, C("s"), C("P"), C("p"), 1)
     cloud(c, 222, 26, 46, C("s"), C("P"), C("p"), 2)
@@ -756,14 +840,14 @@ def ch1():
     c.vline(door - 18, GY - 6, 6, C("R"))
     # Автобус на дачу: дверь открыта, на табло - значок домика с деревом.
     bus(c, 238, 108)
-    # Бабушка с чемоданом протягивает ключи, внук берёт; солнце светит им в спину.
+    # Бабушка с чемоданом протягивает ключи, внук тянет руку; солнце светит им в спину.
     rim = (C("Y"), 0.55)
-    place(c, 184, 152, HERO, "right", "happy", cast=28, shadow=0.26, rim=rim)
+    place(c, 182, 152, HERO, "right", "happy", cast=28, shadow=0.26, rim=rim, reach=True)
     for i in range(14):
         tint(c, 228 + i, 151 + i // 5, 232 + i * 2, 152 + i // 5, INK, 0.2)
     put(c, rimmed(suitcase().img, C("Y"), 0.5), 220, 133)
-    place(c, 207, 153, GRANDMA, "left", "happy", cast=28, shadow=0.26, rim=rim)
-    keys(c, 196, 131)
+    keys(c, 196, 141)
+    place(c, 208, 153, GRANDMA, "left", "happy", cast=28, shadow=0.26, rim=rim, reach=True)
     birds(c, [(84, 30), (92, 34), (100, 28), (180, 18)], C("p"))
     # Роса бликами на плитке.
     rnd = random.Random(1)
@@ -838,13 +922,13 @@ def ch2():
     """Свои люди. Солнечный полдень: Марат несёт ящик продуктов в своё кафе «Уют», тётя Валя с авоськой,
     хозяин рядом, у двери - первый сотрудник в фартуке с метлой; у входа - коробки заказов."""
     c = Canvas(W, H)
-    sky(c, [C("U"), C("#3fb8e8"), C("#9ad8f0"), C("#d8f0f8")], 0, 122, 10)
-    sun(c, 300, 16, 8, C("Y"), C("Y"))
-    cloud(c, 128, 40, 58, WHITE, C("#d8f0f8"), C("W"), 4)
-    cloud(c, 226, 52, 36, WHITE, C("#d8f0f8"), C("W"), 5)
-    cloud(c, 168, 18, 24, WHITE, C("#d8f0f8"), C("W"), 6)
-    far_city(c, 122, C("#a8d4ec"), 23, tall=(10, 30))
-    far_city(c, 126, C("#8fbfdc"), 24, tall=(6, 20))
+    sky(c, [C("U"), M("U", "w", 0.25), ICE, MIST], 0, 122, 10)
+    sun(c, 40, 20, 8, C("Y"), C("Y"))  # свет сверху слева, как у всех спрайтов
+    cloud(c, 128, 40, 58, WHITE, MIST, C("W"), 4)
+    cloud(c, 226, 52, 36, WHITE, MIST, C("W"), 5)
+    cloud(c, 168, 18, 24, WHITE, MIST, C("W"), 6)
+    far_city(c, 122, M("U", "w", 0.62), 23, tall=(10, 30))
+    far_city(c, 126, M("U", "W", 0.72), 24, tall=(6, 20))
     c.rect(0, 122, W, 14, C("i"))
     for x in range(0, W, 2):
         c.px(x, 122 - (x % 3 == 0), C("j"))
@@ -866,7 +950,7 @@ def ch2():
     marat_box(c, 112, 152)
     place(c, 178, 150, dict(VALYA, prop="stringbag"), "front", "happy", shadow=0.25)
     place(c, 202, 154, HERO, "left", "happy", shadow=0.25)
-    staff_broom(c, door, 150)
+    staff_broom(c, door - 9, 150)
     for px_, py in ((150, 156), (158, 158)):
         pigeon(c, px_, py)
     save(c, "ch2")
@@ -875,7 +959,7 @@ def ch2():
 def cafe(c, x, w, top):
     """Кафе «Уют»: терракотовая штукатурка, два арочных окна с тёплым залом, арочная дверь,
     ящики с цветами, кронштейн с чашкой вместо надписи."""
-    wall = C("#d9825a")
+    wall = M("B", "n", 0.4)
     plaster(c, x, top, w, GY - top, wall, 30)
     c.rect(x + w - 3, top, 3, GY - top, shade(wall, 0.84))
     c.rect(x - 2, top - 5, w + 5, 5, C("b"))
@@ -1002,16 +1086,22 @@ def marat_box(c, x, y):
 
 
 def staff_broom(c, x, y):
-    """Первый сотрудник у двери: в фартуке, с метлой."""
-    o = Canvas(10, 40)
-    o.line(6, 0, 4, 30, C("a"))
-    o.line(7, 0, 5, 30, C("B"))
-    for i in range(8):
-        o.line(4, 30, 1 + i, 39, C("y") if i % 2 else C("o"))
-    o.rect(2, 29, 6, 2, C("b"))
-    o = outlined(o)
+    """Первый сотрудник у двери: в фартуке, метла в руке (черенок проходит через кисть)."""
     place(c, x, y, STAFF, "front", "happy", shadow=0.25)
-    put(c, o, x + 6, y - 38)
+    hx, hy = x + 8, y - 10  # левая кисть (справа от нас): слой p_skin, x 17-18, строки 24-25
+    o = Canvas(13, 40)
+    o.line(7, 0, 6, 32, C("a"))
+    o.line(8, 0, 7, 32, C("B"))
+    o.rect(3, 31, 8, 2, C("b"))
+    for i in range(9):
+        o.line(6, 33, 2 + i, 39, C("y") if i % 2 else C("o"))
+    o = outlined(o)
+    put(c, o, hx - 7, y - 40)
+    skin = C(STAFF["skin"])
+    c.rect(hx - 1, hy - 1, 2, 2, skin)
+    c.px(hx, hy, shade(skin, 0.86))
+    c.hline(hx - 1, hy - 2, 2, INK)
+    c.hline(hx - 1, hy + 1, 2, INK)
 
 
 def megamart(c, x, top, base, glass, frame, sign, lit=None, seed=1, sky_refl=None, parapet=True):
@@ -1111,7 +1201,7 @@ def crane(c, x, top, arm_l, arm_r, color, tower=30):
     c.rect(x - 2, top - 14, 5, 14, color)
     c.rect(x + arm_r - 12, top + 5, 12, 7, C("G"))
     c.rect(x - 9, top + 5, 10, 9, shade(color, 0.85))
-    c.rect(x - 7, top + 7, 6, 4, C("#9ad8f0"))
+    c.rect(x - 7, top + 7, 6, 4, ICE)
 
 
 def ch3():
@@ -1119,26 +1209,26 @@ def ch3():
     магазином; у входа гиганта - Эдуард с листовками, флажки и шары, туда идут покупатели.
     Наш магазин - в серой тени, но витрины горят тёплым; хозяин и тётя Валя хмурятся."""
     c = Canvas(W, H)
-    sky(c, [C("G"), C("#7a8aa6"), C("l"), C("#b4bccb")], 0, 124, 10)
+    sky(c, [C("G"), M("G", "l", 0.65), C("l"), M("l", "W", 0.75)], 0, 124, 10)
     overcast(c, [
-        (98, (C("#c8d0dc"), C("#a8b4c8"), C("#8e9ab0"))),
-        (72, (C("#b4bccb"), C("#97a3b8"), C("#7a8aa6"))),
-        (44, (C("#a0aabd"), C("#8391aa"), C("#6a7896"))),
-        (18, (C("#8b97ad"), C("#727f9a"), C("G"))),
+        (98, (M("W", "w", 0.15), M("l", "W", 0.55), C("l"))),
+        (72, (M("l", "W", 0.75), M("l", "W", 0.25), M("G", "l", 0.65))),
+        (44, (M("l", "W", 0.4), M("G", "l", 0.8), M("G", "l", 0.35))),
+        (18, (M("G", "l", 0.95), M("G", "l", 0.5), C("G"))),
     ], 31)
-    far_city(c, 124, C("#8e9ab0"), 31, tall=(10, 32))
-    c.rect(0, 124, W, 12, C("#4a7a5a"))
-    pavement(c, GY, 160, C("#b4bccb"), 11)
-    curb_road(c, 160, C("W"), C("#33384e"), C("#c8ccd4"), 12)
+    far_city(c, 124, C("l"), 31, tall=(10, 32))
+    c.rect(0, 124, W, 12, M("e", "G", 0.4))
+    pavement(c, GY, 160, M("l", "W", 0.75), 11)
+    curb_road(c, 160, C("W"), M("K", "g", 0.4), C("W"), 12)
     # Стройка второго корпуса и кран за «МегаМартом».
     for gx in range(244, W, 14):
         c.vline(gx, 0, 40, C("G"))
-        c.vline(gx + 1, 0, 40, C("#76829c"))
+        c.vline(gx + 1, 0, 40, M("G", "l", 0.55))
     for gy in range(2, 40, 10):
         c.hline(244, gy, W - 244, C("G"))
     crane(c, 304, 8, 200, 18, C("o"))
-    ex = megamart(c, 150, 30, GY, C("#3a4a6a"), C("#26304a"), C("R"), lit=C("#9ad8f0"), seed=3, sky_refl=C("#a0aabd"))
-    glow(c, ex, GY + 6, 40, 7, C("#9ad8f0"), 0.22)
+    ex = megamart(c, 150, 30, GY, C("g"), C("K"), C("R"), lit=ICE, seed=3, sky_refl=M("l", "W", 0.4))
+    glow(c, ex, GY + 6, 40, 7, ICE, 0.22)
     # Флажки и арка из шаров - открытие.
     for i, fx in enumerate(range(152, W, 7)):
         sag = int(6 * math.sin((fx - 152) / 56 * math.pi) ** 2)
@@ -1193,7 +1283,7 @@ def ch3():
     c.hline(119, 155, 5, C("R"))
     c.ellipse(121, 157.5, 1.5, 1, C("R"))
     for yy in range(4):
-        c.hline(36 - yy * 2, 157 + yy, 24 + yy * 4, mix(C("#a0aabd"), C("#b4bccb"), 0.3))
+        c.hline(36 - yy * 2, 157 + yy, 24 + yy * 4, mix(M("l", "W", 0.4), M("l", "W", 0.75), 0.3))
     save(c, "ch3")
 
 
@@ -1225,35 +1315,36 @@ def trolley(c, x, y):
 
 
 def ch4():
-    """Проверка. Наш зал: инспектор Белова с планшетом проверяет градусник холодильника, хозяин
-    вытянулся рядом (капелька пота). Пол вымыт до блеска - в нём отражаются люди и стеллажи;
-    ведро со шваброй, знак «мокрый пол» значком; свет ламп, за окном день."""
+    """Проверка. Наш зал: инспектор Белова (фуражка с кокардой, как на портрете) с планшетом смотрит
+    на градусник холодильника; хозяин вытянулся (капелька пота), тётя Валя хмурится у стеллажа - это
+    Эдуард нажаловался. Пол вымыт до блеска - в нём отражаются люди и стеллажи; ведро со шваброй,
+    знак «мокрый пол» значком и корзинки - ближний план; свет ламп, за окном день."""
     c = Canvas(W, H)
-    FY = 106  # низ стены, дальше пол
+    FY = 118  # низ стены, дальше пол: стена выше - стеллажи крупнее, пол не пустует
     plaster(c, 0, 0, W, FY, C("F"), 61)
     for x in range(0, W, 24):
-        c.vline(x, 0, FY - 28, shade(C("F"), 0.97))
-    c.rect(0, FY - 28, W, 28, C("B"))
+        c.vline(x, 0, FY - 30, shade(C("F"), 0.97))
+    c.rect(0, FY - 30, W, 30, C("B"))
     for x in range(0, W, 8):
-        c.vline(x, FY - 27, 27, C("a"))
-        c.vline(x + 1, FY - 27, 27, shade(C("B"), 1.08))
-    c.rect(0, FY - 30, W, 3, C("b"))
-    c.hline(0, FY - 30, W, C("n"))
+        c.vline(x, FY - 29, 29, C("a"))
+        c.vline(x + 1, FY - 29, 29, shade(C("B"), 1.08))
+    c.rect(0, FY - 32, W, 3, C("b"))
+    c.hline(0, FY - 32, W, C("n"))
     c.hline(0, FY - 1, W, C("x"))
     # Окно: день, напротив дом и дерево.
-    wx, wy, ww, wh = 10, 16, 50, 48
+    wx, wy, ww, wh = 10, 18, 50, 52
     view = Canvas(ww, wh)
     for y in range(wh):
-        view.hline(0, y, ww, mix(C("#9ad8f0"), C("#d8f0f8"), y / wh))
-    cloud(view, 6, 12, 18, WHITE, C("#d8f0f8"), C("W"), 3)
-    view.rect(0, 34, ww, 14, C("i"))
-    view.rect(3, 14, 22, 26, C("t"))
-    view.rect(3, 14, 22, 2, shade(C("t"), 0.8))
+        view.hline(0, y, ww, mix(ICE, MIST, y / wh))
+    cloud(view, 6, 12, 18, WHITE, MIST, C("W"), 3)
+    view.rect(0, 38, ww, 14, C("i"))
+    view.rect(3, 16, 22, 28, C("t"))
+    view.rect(3, 16, 22, 2, shade(C("t"), 0.8))
     for xx in range(6, 22, 6):
-        for yy in (18, 26):
+        for yy in (20, 29):
             view.rect(xx, yy, 3, 5, C("U"))
-    put(view, tree(20, 34, (C("E"), C("e"), C("d")), 2), 30, 8)
-    view.rect(0, 42, ww, 6, C("W"))
+    put(view, tree(20, 36, (C("E"), C("e"), C("d")), 2), 30, 10)
+    view.rect(0, 46, ww, 6, C("W"))
     put(c, view, wx, wy)
     c.frame(wx - 2, wy - 2, ww + 4, wh + 4, WHITE)
     c.frame(wx - 1, wy - 1, ww + 2, wh + 2, C("W"))
@@ -1265,7 +1356,7 @@ def ch4():
     c.ellipse(wx + 9, wy + wh - 7, 4, 3, C("e"))
     c.px(wx + 8, wy + wh - 9, C("R"))
     c.px(wx + 11, wy + wh - 8, C("R"))
-    # Стеллажи с товарами игры, холодильник, касса.
+    # Стеллажи с товарами игры, холодильник, часы, касса.
     shelf_unit(c, 72, 26, 56, FY - 26, C("B"), ["bread", "buns", "pies", "honeycake", "jam"], 1)
     shelf_unit(c, 132, 26, 56, FY - 26, C("e"), ["apples", "tangerines", "pickles", "potatoes", "pumpkins"], 2)
     fridge(c, 194, 20, 62, FY - 20)
@@ -1274,62 +1365,86 @@ def ch4():
     c.vline(292, 17, 5, C("K"))
     c.hline(292, 22, 4, C("K"))
     c.px(292, 22, C("R"))
-    c.rect(266, FY - 36, 54, 6, C("n"))
-    c.hline(266, FY - 36, 54, C("N"))
-    c.rect(266, FY - 30, 54, 30, C("a"))
-    c.vline(266, FY - 30, 30, C("b"))
-    for yy in range(FY - 26, FY, 6):
+    c.rect(266, FY - 38, 54, 6, C("n"))
+    c.hline(266, FY - 38, 54, C("N"))
+    c.rect(266, FY - 32, 54, 32, C("a"))
+    c.vline(266, FY - 32, 32, C("b"))
+    for yy in range(FY - 28, FY, 6):
         c.hline(268, yy, 52, C("b"))
-    c.rect(286, FY - 52, 20, 16, C("G"))
-    c.rect(288, FY - 50, 16, 6, C("E"))
-    c.hline(289, FY - 48, 6, C("e"))
-    c.rect(284, FY - 38, 24, 2, C("g"))
-    c.rect(270, FY - 42, 10, 6, C("W"))
-    # Пол плиткой в перспективе.
-    rnd = random.Random(9)
+    c.rect(286, FY - 54, 20, 16, C("G"))
+    c.rect(288, FY - 52, 16, 6, C("E"))
+    c.hline(289, FY - 50, 6, C("e"))
+    c.rect(284, FY - 40, 24, 2, C("g"))
+    c.rect(270, FY - 44, 10, 6, C("W"))
+    # Пол плиткой в перспективе: тона пола игры через одну, ближе к зрителю - на ступень темнее.
     y, h, row = FY, 4, 0
     while y < H:
         hh = min(h, H - y)
         tw = 22 + row * 6
+        near = 0.97 if y > 156 else 1.0
         for x in range(-((row * 9) % tw), W, tw):
-            tone = C("F") if ((x // tw) + row) % 2 else C("q")
+            tone = shade(C("f") if ((x // tw) + row) % 2 else C("Q"), near)
             c.rect(x, y, tw, hh, tone)
-            c.hline(x, y, tw, shade(tone, 0.93))
+            c.hline(x, y, tw, shade(tone, 0.92))
             c.vline(x, y, hh, shade(tone, 0.9))
+            c.hline(x + 1, y + 1, tw - 2, shade(tone, 1.03))
         y += hh
         h += 2
         row += 1
     # Отражения стеллажей в мытом полу.
-    for sx, sw, col in ((72, 56, C("B")), (132, 56, C("e")), (194, 62, C("#9ad8f0")), (266, 54, C("a"))):
-        for i in range(22):
+    for sx, sw, col in ((72, 56, C("B")), (132, 56, C("e")), (194, 62, ICE), (266, 54, C("a"))):
+        for i in range(20):
             for xx in range(sx + 2, sx + sw - 2):
                 if (xx + i) % 3:
-                    blend(c, xx, FY + 1 + i, col, 0.24 * (1 - i / 22))
+                    blend(c, xx, FY + 1 + i, col, 0.26 * (1 - i / 20))
     # Свет из окна косой полосой по полу.
-    for i in range(46):
+    for i in range(40):
         for xx in range(wx + 6 + i // 2, wx + ww + 10 + i):
-            blend(c, xx, FY + 2 + i, C("Y"), 0.1)
+            blend(c, xx, FY + 2 + i, C("Y"), 0.06)
     # Лампы под потолком.
     for lx in (100, 226):
         c.vline(lx, 0, 4, C("G"))
         c.rect(lx - 7, 4, 15, 3, C("y"))
         c.hline(lx - 6, 7, 13, C("Y"))
         glow(c, lx, 8, 16, 5, C("Y"), 0.3)
-        cone(c, lx, 9, 158, 56, C("#fff0c0"), 0.1)
-    # Люди с отражениями: хозяин навытяжку, инспектор у градусника.
-    place(c, 152, 152, HERO, "front", "frown", shadow=0.2, reflect=0.22)
-    c.px(163, 121, WHITE)
-    c.rect(162, 122, 2, 2, C("#5fcde4"))
-    c.px(163, 124, C("U"))
-    place(c, 204, 155, INSPECTOR, "left", None, shadow=0.2, reflect=0.22)
-    clipboard(c, 183, 128)
-    # Ведро, швабра, знак «мокрый пол», корзинки у входа.
-    mop_bucket(c, 104, 170)
-    wet_sign(c, 36, 164)
+        cone(c, lx, 9, 150, 50, LAMP, 0.07)
+    # Градусник на дверце холодильника - на него смотрит инспектор.
+    thermometer(c, 200, 92)
+    # Люди с отражениями: Валя хмурится у стеллажа, хозяин навытяжку, инспектор у градусника.
+    place(c, 100, 151, VALYA, "right", "frown", shadow=0.22, reflect=0.2)
+    place(c, 140, 153, HERO, "front", "frown", shadow=0.22, reflect=0.22)
+    c.px(151, 122, WHITE)
+    c.rect(150, 123, 2, 2, BLUE_LIGHT)
+    c.px(151, 125, C("U"))
+    clipboard(c, 186, 130)
+    place(c, 178, 155, dict(INSPECTOR, band="g"), "right", None, shadow=0.22, reflect=0.22, reach=True)
+    # Ближний план: знак «мокрый пол», ведро со шваброй, корзинки у входа.
+    wet_sign(c, 22, 168)
+    mop_bucket(c, 60, 178)
     baskets(c, 306, 180)
-    for sx, sy in ((50, 132), (128, 150), (232, 124), (238, 168), (20, 176), (96, 118), (300, 136)):
+    for sx, sy in ((48, 132), (120, 166), (232, 128), (246, 170), (90, 174), (214, 140), (296, 136)):
         sparkle(c, sx, sy)
+    # Края кадра чуть темнее - взгляд в середину, на людей.
+    for yy in range(H):
+        for xx in list(range(0, 14)) + list(range(W - 14, W)):
+            d = min(xx, W - 1 - xx)
+            blend(c, xx, yy, INK, 0.05 * (1 - d / 14) + (0.04 if yy > 164 else 0))
     save(c, "ch4")
+
+
+def thermometer(c, x, y):
+    """Градусник 5×20: стекло, красный столбик, шарик снизу, риски сбоку."""
+    o = Canvas(7, 22)
+    o.round_rect(1, 0, 4, 17, WHITE, 1)
+    o.vline(4, 1, 15, C("W"))
+    for yy in range(2, 15, 3):
+        o.px(1, yy, C("l"))
+    o.vline(2, 7, 11, C("R"))
+    o.vline(3, 7, 11, C("r"))
+    o.ellipse(3, 18.5, 2.6, 2.6, C("R"))
+    o.px(2, 18, C("s"))
+    o = outlined(o)
+    put(c, o, x - 4, y)
 
 
 def baskets(c, x, base):
@@ -1374,21 +1489,17 @@ def fridge(c, x, y, w, h):
     c.vline(x, y, h, WHITE)
     c.vline(x + w - 1, y, h, C("l"))
     c.rect(x, y, w, 6, C("U"))
-    c.hline(x, y, w, C("#5fcde4"))
+    c.hline(x, y, w, BLUE_LIGHT)
     for i in range(2):
         dx = x + 3 + i * (w - 6) // 2
         dw = (w - 6) // 2 - 2
-        goods(c, dx, y + 9, dw, h - 14, mix(C("#d8f0f8"), C("#5fcde4"), 0.3), C("#d8f0f8"), 70 + i, shelf=C("l"), items=["milk", "icecream", "water", "juice", "kvass"], step=17)
+        goods(c, dx, y + 9, dw, h - 14, mix(MIST, BLUE_LIGHT, 0.3), MIST, 70 + i, shelf=C("l"), items=["milk", "icecream", "water", "juice", "kvass"], step=17)
         c.frame(dx - 1, y + 8, dw + 2, h - 12, C("l"))
         c.vline(dx + dw - 3, y + h // 2 - 6, 12, C("G"))
         for k in range(6):
             blend(c, dx + k, y + 9, WHITE, 0.6 - k * 0.1)
             blend(c, dx, y + 9 + k, WHITE, 0.6 - k * 0.1)
-    glow(c, x + w // 2, y + h // 2, w // 2 + 8, h // 2 + 6, C("#9ad8f0"), 0.12)
-    # Градусник на дверце - его проверяет инспектор.
-    c.rect(x + w - 10, y + 12, 3, 12, WHITE)
-    c.vline(x + w - 9, y + 16, 7, C("U"))
-    c.px(x + w - 9, y + 24, C("U"))
+    glow(c, x + w // 2, y + h // 2, w // 2 + 8, h // 2 + 6, ICE, 0.12)
 
 
 def clipboard(c, x, y):
@@ -1409,15 +1520,15 @@ def mop_bucket(c, x, base):
     o.line(15, 0, 8, 36, C("a"))
     o.line(16, 0, 9, 36, C("B"))
     o.rect(2, 32, 16, 12, C("U"))
-    o.rect(2, 32, 16, 2, C("#5fcde4"))
+    o.rect(2, 32, 16, 2, BLUE_LIGHT)
     o.vline(17, 34, 10, C("u"))
-    o.rect(4, 30, 12, 2, C("#9ad8f0"))
+    o.rect(4, 30, 12, 2, ICE)
     for i in range(6):
         o.vline(5 + i * 2, 28, 3, WHITE if i % 2 else C("W"))
     o = outlined(o)
     dark(c, x, base, 10, 2, 0.25)
     put(c, o, x - 11, base - 45)
-    glow(c, x - 18, base + 4, 14, 3, C("#9ad8f0"), 0.3)
+    glow(c, x - 18, base + 4, 14, 3, ICE, 0.3)
 
 
 def wet_sign(c, x, base):
@@ -1541,17 +1652,17 @@ def ch5():
     """Универмаг. Сумерки: наш универмаг светится, у входа свои; «МегаМарт» погас и заколочен,
     листок «продаётся»; Эдуард идёт от него к нам под фонарём с коробкой - несёт старый долг."""
     c = Canvas(W, H)
-    sky(c, [C("K"), C("#3a3a6a"), C("p"), C("P"), C("s"), C("o")], 0, 124, 12)
+    sky(c, [C("K"), M("g", "p", 0.2), C("p"), C("P"), C("s"), C("o")], 0, 124, 12)
     stars(c, 40, 50, 3)
     c.ellipse(300, 12, 6, 6, C("N"))
-    c.ellipse(303, 10, 5, 5, mix(C("K"), C("#3a3a6a"), 0.15))
+    c.ellipse(303, 10, 5, 5, mix(C("K"), M("g", "p", 0.2), 0.15))
     glow(c, 298, 12, 12, 10, C("N"), 0.1)
-    far_city(c, 124, C("#3a3058"), 51, lit=C("y"), lit_p=0.3, tall=(14, 44))
-    c.rect(0, 124, W, 12, C("#2e4a48"))
-    pavement(c, GY, 160, C("#8a84a0"), 13)
-    curb_road(c, 160, C("#a89cb0"), C("#2a2840"), C("#a89cb0"), 14)
+    far_city(c, 124, M("K", "p", 0.35), 51, lit=C("y"), lit_p=0.3, tall=(14, 44))
+    c.rect(0, 124, W, 12, M("d", "K", 0.45))
+    pavement(c, GY, 160, M("l", "p", 0.25), 13)
+    curb_road(c, 160, M("W", "p", 0.25), M("k", "g", 0.4), M("W", "p", 0.25), 14)
     # «МегаМарт» погас: тёмное стекло, вывеска без света, двери заколочены, листок «продаётся».
-    ex = megamart(c, 238, 34, GY, C("#22263a"), C("#181c2c"), C("#4a5068"), seed=5, sky_refl=C("#5a4a7a"))
+    ex = megamart(c, 238, 34, GY, M("k", "K", 0.6), M("k", "K", 0.2), M("g", "G", 0.3), seed=5, sky_refl=M("g", "p", 0.5))
     for d in (0, 2):
         c.line(ex - 20, GY - 40 + d, ex + 20, GY - 4 + d, C("a") if d else C("B"))
         c.line(ex + 20, GY - 40 + d, ex - 20, GY - 4 + d, C("a") if d else C("B"))
@@ -1614,26 +1725,25 @@ def ch6_finale():
     """Финал. Ночь, салют над универмагом в гирляндах; у входа - Марат, тётя Валя, бабушка, хозяин,
     Соня и Эдуард, а впереди спиной к нам - весь район смотрит салют."""
     c = Canvas(W, H)
-    sky(c, [INK, C("#1d1a36"), C("K"), C("#33305a")], 0, 124, 10)
+    sky(c, [INK, M("k", "K", 0.4), C("K"), M("K", "p", 0.3)], 0, 124, 10)
     stars(c, 70, 100, 9)
-    far_city(c, 124, C("#221f3a"), 77, lit=C("y"), lit_p=0.3, tall=(14, 44))
+    far_city(c, 124, M("k", "K", 0.6), 77, lit=C("y"), lit_p=0.3, tall=(14, 44))
     firework(c, 30, 46, 24, C("R"), 1)
     firework(c, 290, 50, 26, C("c"), 3)
-    firework(c, 160, 10, 14, C("Y"), 2)
     firework(c, 236, 14, 11, C("E"), 4)
     firework(c, 84, 14, 10, C("P"), 5)
     for sx, top in ((56, 80), (268, 86)):
         for y in range(top, 122, 2):
             blend(c, sx + (y - top) // 10, y, C("y"), 0.55 - (y - top) / 90)
-    c.rect(0, 124, W, 12, C("#22383a"))
-    pavement(c, GY, 160, C("#6a6488"), 15)
-    curb_road(c, 160, C("#8a80a0"), C("#211f36"), C("#8a80a0"), 16)
+    c.rect(0, 124, W, 12, M("K", "d", 0.4))
+    pavement(c, GY, 160, M("G", "p", 0.3), 15)
+    curb_road(c, 160, M("l", "p", 0.3), M("k", "K", 0.5), M("l", "p", 0.3), 16)
     door = univermag(c, 58, 204, 34, mix(C("N"), C("p"), 0.55), 71, garland=True, lit_p=1)
     glow(c, 70, 60, 30, 40, C("R"), 0.1)
     glow(c, 252, 60, 30, 40, C("c"), 0.1)
     lamp_post(c, 30, GY + 12, on=C("Y"))
     lamp_post(c, 290, GY + 12, on=C("Y"))
-    amb = (C("#33305a"), 0.1)
+    amb = (M("K", "p", 0.3), 0.1)
     place(c, door - 64, 148, MARAT, "front", "happy", light=amb)
     place(c, door - 42, 147, VALYA, "front", "happy", light=amb)
     place(c, door - 20, 146, GRANDMA, "front", "happy", light=amb)
