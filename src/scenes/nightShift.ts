@@ -376,7 +376,9 @@ export function finishDay(scene: StoreScene): void {
   const clothes = night.clothes;
   if (clothes && (clothes.sold || clothes.sale || clothes.wage)) {
     const sale = clothes.sale ? ` · ${t('cl.summarySale', { n: clothes.sale })}` : '';
-    extra.push([t('cl.summary'), `${t('cl.summaryValue', { n: clothes.sold, sum: clothes.income - clothes.wage })}${sale}`]);
+    // 27.11: стойки пополняются сами - утренний завоз рядом с выручкой, чтобы этаж не казался вдвое прибыльнее.
+    const restock = clothes.restock ? ` · ${t('cl.summaryRestock', { n: clothes.restock })}` : '';
+    extra.push([t('cl.summary'), `${t('cl.summaryValue', { n: clothes.sold, sum: clothes.income - clothes.wage })}${sale}${restock}`]);
   }
   // Фудкорт на третьем этаже (game/foodcourt.ts): едоки и деньги за вечер; точку закрыли по жалобе — тоже строкой.
   const court = night.food;
@@ -455,6 +457,9 @@ export function finishDay(scene: StoreScene): void {
   newcomer.hallCoachOff(scene);
   saveGame(scene.state);
   track('day_end', finishedDay, scene.stats.revenue);
+  // 27.11 (полки на «Универмаге»): сколько ушли ни с чем у пустой полки и сколько ходок сделал грузчик - видно в D1.
+  track('lost_empty', finishedDay, scene.stats.lostWhy?.empty ?? 0);
+  if (scene.stats.work?.loader) track('loader_trips', finishedDay, scene.stats.work.loader);
   // Вовлечённость: сколько моментов дня поймали из показанных и сколько заданий дня выполнили.
   if (scene.stats.momentsShown) {
     track('moments_seen', finishedDay, scene.stats.momentsShown);

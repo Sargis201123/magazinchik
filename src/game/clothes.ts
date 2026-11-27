@@ -97,6 +97,8 @@ export interface ClothesDay {
   sale: number;
   income: number;
   wage: number;
+  /** Вечер: сколько стоил утренний завоз этого дня (clothes.today) - в итогах под «Подробнее», рядом с выручкой. */
+  restock?: number;
 }
 
 /** Утренний завоз: сколько вещей привезли сегодня и за сколько (строка «Утром закупили» в сводке утра). */
@@ -260,6 +262,6 @@ export function clothesNight(state: StoreState, guests: number): { state: StoreS
       { ...state, money: Math.max(0, money), debt: state.debt + Math.max(0, -money) },
       { ...c, stock, last: { ...plan, day: state.day }, earned: (c.earned ?? 0) + net },
     ),
-    day: plan,
+    day: { ...plan, restock: clothesToday(state)?.spent ?? 0 },
   };
 }

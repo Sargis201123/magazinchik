@@ -963,9 +963,10 @@ export function simulate({
       state = early.state;
       purchases += early.spent;
     }
-    // С пределом зала закупка - на тех, кого пробьют (зал + кассы без хозяина): 27.11, разбор симулятора - на всех
-    // позванных он закупал вдвое-втрое лишнего (порча, минус на «Минимаркете», банкротства у «базового» игрока).
-    const buyFor = hall ? Math.min(guestsToday(state), hallCap(state) + autoCapacity(state)) : guestsToday(state);
+    // Закупка - на всех позванных, как кнопки игры «Закупать сам» и «Закупить нужное» (ui/morning.ts guestsToday).
+    // 27.11: пробовали «на тех, кого пробьют» (зал + кассы без хозяина) - на цифры почти не влияет, а такого правила
+    // в игре нет; банкротства «базового» игрока были от того, что не было потока «на бегу», а не от закупки.
+    const buyFor = guestsToday(state);
     if (buyMode === 'auto' && autoActive(state)) {
       // «Закупать сам»: тот же расчёт и те же цены, что у кнопки, только без брака.
       const before = state.money;
@@ -1095,6 +1096,8 @@ export function simulate({
     // «60 ходок за день», а в сцене грузчик успевал 9-25, - симулятор не видел, что полки пустеют.
     const loaderM = hall ? staffOf(state, 'loader') : undefined;
     const stockRate = hall ? ((loaderM ? loaderPace(state, loaderM) : 0) + apprStockPace(state) * levelPace(state)) / tripSeconds(state) : 0;
+    // Ночью ученик уходит домой (apprentice.ts stockLoop), носит только грузчик.
+    const nightStockRate = hall && loaderM ? loaderPace(state, loaderM) / tripSeconds(state) : 0;
     let stockClock = 0;
     let staffTrips = 0;
     let ownerTrips = 0;
@@ -1175,10 +1178,11 @@ export function simulate({
     // Гостей зала у кассиров, сменщика и киосков - эта доля: их время касс уходит и на поток «на бегу».
     const autoShare = autoCap > 0 ? autoCap / (autoCap + capacity.owner) : 0;
     /** Прошло dt секунд: грузчик и ученик сделали свои ходки (несут на самую пустую полку, где есть что положить). */
-    const stockTick = (dt: number) => {
+    const stockTick = (dt: number, night: boolean) => {
       clock += dt;
-      if (stockRate <= 0) return;
-      stockClock += stockRate * dt;
+      const rate = night ? nightStockRate : stockRate;
+      if (rate <= 0) return;
+      stockClock += rate * dt;
       while (stockClock >= 1) {
         const index = shelfToFill(state);
         // Нести нечего - ждут у склада: впрок ходки не копятся, следующая начнётся, когда понадобится.
@@ -1247,9 +1251,9 @@ export function simulate({
     // Гости части дня (seconds - сколько она длится): count - в зал, quick - «на бегу», вперемешку ровно по времени.
     const runGuests = (count: number, tolerance: number, cap: number, night: boolean, seconds: number, quick = 0) => {
     const total = count + quick;
-    if (!total) stockTick(seconds);
+    if (!total) stockTick(seconds, night);
     for (let g = 0; g < total; g++) {
-      stockTick(seconds / total);
+      stockTick(seconds / total, night);
       if (quick > 0 && Math.floor(((g + 1) * quick) / total) > Math.floor((g * quick) / total)) {
         runQuick();
         continue;

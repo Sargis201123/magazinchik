@@ -249,9 +249,11 @@ export function vanOutcome(state: StoreState): VanResult | null {
 }
 
 /** Ночь (day.ts nightCycle, до счетов): итог выезда — в кассу. Выезда сегодня не было — ничего не меняется. */
-export function settleVan(state: StoreState): { state: StoreState; result: VanResult | null } {
+export function settleVan(state: StoreState, day: StoreState = state): { state: StoreState; result: VanResult | null } {
   const van = state.van;
-  const result = van ? vanOutcome(state) : null;
+  // Итог считается по магазину дня (day - состояние до вечера): вечерняя проверка лицензии не меняет задним числом
+  // ни выезд, ни сумму, которую игрок уже видел над вернувшимся фургоном.
+  const result = van ? vanOutcome(day) : null;
   if (!van || !result) return { state, result: null };
   // 14.11, аудит: колесо и бензин в неудачный выезд могли увести кассу в минус — нехватка уходит в долг, как у всех.
   const money = state.money + result.net;

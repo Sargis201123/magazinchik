@@ -372,7 +372,7 @@ export function startDay(scene: StoreScene): void {
   lighting.lightsOn(scene);
   nightShift.flipDoorSign(scene, true);
   visitors.morningCrew(scene);
-  // Кузов загружен — фургон уезжает на выезд, под вечер вернётся (cars.ts, game/van.ts).
+  // Сегодня есть выезд - фургон сам уезжает, под вечер вернётся (cars.ts, game/van.ts; 27.11 грузить не нужно).
   void cars.vanDepart(scene);
   // Утром рассказали, чем кончился вчерашний «проверяющий» (tricks.ts) — больше не показываем.
   if (trickResult(scene.state)) scene.state = seeTrickResult(scene.state);

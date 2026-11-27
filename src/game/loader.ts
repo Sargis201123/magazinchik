@@ -20,6 +20,16 @@ export const loaderSpeed = (state: StoreState): number => warehouseSpeed(state) 
 export const loaderPace = (state: StoreState, m: StaffMember): number => workSpeed(m) * managerBoost(state) * loaderSpeed(state);
 
 /**
+ * Быстрее этого (×4 обычного шага) грузчик в сцене не ходит: на «Универмаге» с автоскладом и менеджером множители
+ * давали ×5 и больше, и он мелькал по залу быстрее глаза. Что сверх предела - в ношу (loaderLoad): ходок меньше,
+ * несёт за раз больше, товара на полки за день приходит столько же. Симулятор считает ходки по полной скорости с
+ * обычной тележкой - по товару за день то же самое.
+ */
+export const LOADER_WALK_MAX = 4;
+/** Во сколько раз больше обычной тележки (staffCarry) несёт грузчик, упёршийся в предел шага. */
+export const loaderLoad = (pace: number): number => Math.max(1, pace / LOADER_WALK_MAX);
+
+/**
  * Ходка со склада к полке и обратно при скорости 1, секунды, по помещениям: путь по залу (scenes/layout.ts,
  * от прохода склада к месту у полки и назад, в среднем по полкам; 60 px/с) плюс взять и положить (0,9 с).
  */

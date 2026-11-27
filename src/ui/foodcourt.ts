@@ -15,6 +15,7 @@ import {
   answerParty,
   closeStall,
   foodcourtGuests,
+  floorEstimate,
   foodcourtOf,
   foodPlan,
   foodRun,
@@ -28,9 +29,11 @@ import {
   stallsOf,
   STALL_IDS,
   STALLS,
+  type FoodRun,
   type StallId,
   type StallPlan,
 } from '../game/foodcourt';
+import { inZar } from '../game/zarshop';
 import { track } from '../platform/analytics';
 import { button, el, toast } from './dom';
 import { row, warn } from './floors';
@@ -52,8 +55,13 @@ const itemsLine = (items: Partial<Record<ProductId, number>>): string =>
 
 /** Кто ведёт точки и как заработать больше — с цифрами сегодняшнего вечера и где купить Кухню или нанять повара. */
 function runLine(state: StoreState): string | null {
-  if (!foodPlan(state)) return null;
   const run = foodRun(state);
+  // Пустой этаж без Кухни: сразу видно, сколько дадут все места сданными, с Кухней и с поваром (в среднем за вечер).
+  if (!foodPlan(state)) {
+    if (run !== 'rent' || inZar(state)) return null;
+    const all = (r: FoodRun) => floorEstimate(state, r);
+    return t('fc.run.empty', { rent: all('rent'), cost: UPGRADES.kitchen.price, own: all('kitchen'), cook: all('cook') });
+  }
   const sum = (r: 'kitchen' | 'cook') => foodPlan(state, r)?.income ?? 0;
   if (run === 'rent') return t('fc.run.rent', { cost: UPGRADES.kitchen.price, own: sum('kitchen'), cook: sum('cook') });
   if (run === 'kitchen') return t('fc.run.kitchen', { wage: STAFF_ROLES.cook.wage, cook: sum('cook') });

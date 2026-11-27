@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newGame, type Shelf, type StaffMember, type StoreState } from '../src/game/economy';
-import { levelPace, loaderPace, loaderSpeed, shelfToFill, STAFF_LEVEL_PACE, TRIP_SECONDS, tripSeconds } from '../src/game/loader';
+import { levelPace, loaderLoad, loaderPace, loaderSpeed, LOADER_WALK_MAX, shelfToFill, STAFF_LEVEL_PACE, TRIP_SECONDS, tripSeconds } from '../src/game/loader';
 import { warehouseSpeed } from '../src/game/gear';
 import { staffCarry } from '../src/game/upgrades';
 import { simulate } from '../src/game/simulate';
@@ -53,6 +53,13 @@ describe('какую полку грузчик пополняет', () => {
     expect(shelfToFill(empty)).toBe(-1);
   });
 
+  it('сверх ×4 шага грузчик несёт больше, а товара за время столько же', () => {
+    expect(loaderLoad(2)).toBe(1);
+    expect(loaderLoad(LOADER_WALK_MAX)).toBe(1);
+    // ×6: ходит ×4, несёт ×1,5 - 4 × 1,5 = 6.
+    expect(Math.min(6, LOADER_WALK_MAX) * loaderLoad(6)).toBeCloseTo(6);
+  });
+
   it('тележка сотрудника тоже растёт с помещением', () => {
     expect(staffCarry(shop({ level: 4 }))).toBe(2 * staffCarry(shop({ level: 0 })));
   });
@@ -70,7 +77,7 @@ describe('симулятор: Трафик v2', () => {
     const quick = big.reduce((n, d) => n + d.quick, 0) / big.length;
     const served = big.reduce((n, d) => n + d.served, 0) / big.length;
     expect(quick).toBeGreaterThan(served / 3);
-    // Пришли все позванные (кассы без хозяина есть), а зал пропустил не больше своего предела.
+    // Пришли все позванные: кто не влез в зал, пробит «на бегу» (кассы без хозяина есть), никто не пропал.
     for (const d of big.filter((x) => x.quick > 0)) expect(d.guests).toBe(d.wanted);
   });
 

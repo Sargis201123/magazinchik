@@ -33,7 +33,7 @@ import { button, el, toast } from './dom';
 import { setItemIcon } from './sheet';
 import { clothesRows } from './clothes';
 import { clothesMorning, clothesOf, stockTotal } from '../game/clothes';
-import { floorEstimate, foodPlan, stallPlaces, stallsOf, STALL_PLACES } from '../game/foodcourt';
+import { floorEstimate, foodPlan, stallPlaces, stallsOf, STALL_IDS, STALL_PLACES, STALLS } from '../game/foodcourt';
 import { pawnOf, pawnPlace, pawnSlots, pawnWaiting } from '../game/pawnshop';
 import { openPawnCard } from './pawnshop';
 
@@ -141,7 +141,7 @@ function openRow(state: StoreState, id: FloorId, getState: () => StoreState, upd
   const look = FLOOR_ROW[id];
   const lock = floorLock(state, id);
   // Фудкорт (27.11): сколько этаж даст каждый вечер — до покупки, точками на всех местах голого этажа.
-  const notes = [id === 'third' ? t(look.note, { n: STALL_PLACES[0], sum: floorEstimate(state) }) : t(look.note)];
+  const notes = [id === 'third' ? t(look.note, { n: STALL_PLACES[0], setup: Math.min(...STALL_IDS.map((id) => STALLS[id].setup)), sum: floorEstimate(state) }) : t(look.note)];
   if (lock === 'level') notes.push(`🔒 ${t('floors.lock', { name: t(STORE_LEVELS[def.minLevel].nameKey) })}`);
   if (lock === 'below') notes.push(`🔒 ${t('floors.lockBelow')}`);
   return row(look.art, t(look.name), notes, [

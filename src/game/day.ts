@@ -157,8 +157,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Лавки скупленной улицы — тоже до счетов; бар иногда шумит (estate.ts).
   const estate = estateNight(s);
   s = estate.state;
-  // Фургон вернулся с выезда (van.ts, 27.11 ездит сам): выручка за вычетом товара и бензина — до счетов.
-  const van = settleVan(s);
+  // Фургон вернулся с выезда (van.ts, 27.11 ездит сам): выручка за вычетом товара и бензина - до счетов. Считается
+  // по магазину дня (state), как над фургоном в сцене: если вечером отобрали лицензию, выезд это не меняет.
+  const van = settleVan(s, state);
   s = van.state;
   // Прокат у входа — тоже до счетов (rental.ts). Прохожие — гости дня по утреннему состоянию: как в прогнозе утра.
   const rental = rentalNight(s, guestsToday(state));
