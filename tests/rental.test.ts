@@ -13,6 +13,7 @@ import {
   rentalKit,
   kitToday,
   rentalLog,
+  KIT_ICON,
   rentalLook,
   rentalNight,
   rentalOf,
@@ -164,7 +165,7 @@ describe('прокат: вечер', () => {
     expect(state.money).toBe(s.money + plan.income);
     expect(state.rental).toEqual({ last: { ...plan, day: 50 }, earned: plan.income, stock: 10, deposit: 'medium' });
     const next = rentalNight({ ...state, day: 51 }, 150).state;
-    expect(rentalLog({ ...next, day: 52 })).toEqual({ n: next.rental!.last!.rented, last: next.rental!.last!.income, total: next.rental!.earned });
+    expect(rentalLog({ ...next, day: 52 })).toEqual({ icon: KIT_ICON[next.rental!.last!.kit], n: next.rental!.last!.rented, last: next.rental!.last!.income, total: next.rental!.earned });
     expect(rentalLog({ ...next, day: 55 })).toBeNull();
   });
 

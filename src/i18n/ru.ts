@@ -1861,7 +1861,7 @@ export const ru = {
   "rental.kit.rain": "зонты",
   "rental.perDay": "{n} 💰 в день",
   "rental.stock": "На стойке {n} вещей, она растёт вместе с магазином",
-  "rental.yesterday": "Вчера взяли {n} шт.: +{last} 💰 · всего: +{total} 💰",
+  "rental.yesterday": "Вчера взяли {icon} ×{n}: +{last} 💰 · всего: +{total} 💰",
   "rental.summary": "Прокат у входа",
   "rental.summaryValue": "{icon} {n} шт. · +{sum} 💰",
   "rental.tap": "{icon} Сегодня возьмут ~{n} из {max} · ~{sum} 💰",

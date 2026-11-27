@@ -1860,7 +1860,7 @@ export const pt: Record<TextKey, string> = {
   "rental.kit.rain": "guarda-chuvas",
   "rental.perDay": "{n} 💰 por dia",
   "rental.stock": "{n} itens na banca: ela cresce com a sua loja",
-  "rental.yesterday": "Ontem, {n} alugados: +{last} 💰 · total: +{total} 💰",
+  "rental.yesterday": "Ontem alugaram {icon} ×{n}: +{last} 💰 · total: +{total} 💰",
   "rental.summary": "Aluguel na entrada",
   "rental.summaryValue": "{icon} {n} alugados · +{sum} 💰",
   "rental.tap": "{icon} Hoje ~{n} de {max} aluguéis · ~{sum} 💰",

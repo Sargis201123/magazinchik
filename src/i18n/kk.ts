@@ -1857,7 +1857,7 @@ export const kk: Record<TextKey, string> = {
   "rental.kit.rain": "қолшатыр",
   "rental.perDay": "Күніне {n} 💰",
   "rental.stock": "Тұғырда {n} зат, ол дүкенмен бірге өседі",
-  "rental.yesterday": "Кеше {n} зат алды: +{last} 💰 · барлығы: +{total} 💰",
+  "rental.yesterday": "Кеше алғаны {icon} ×{n}: +{last} 💰 · барлығы: +{total} 💰",
   "rental.summary": "Есік алдындағы прокат",
   "rental.summaryValue": "{icon} {n} зат · +{sum} 💰",
   "rental.tap": "{icon} Бүгін ~{n}/{max} зат алады · ~{sum} 💰",

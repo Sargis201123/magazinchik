@@ -508,13 +508,16 @@ export function finishDay(scene: StoreScene): void {
         total: state.money,
         housewarming: Boolean(bill?.housewarming),
         // Фургон - с названием события: «🚐 Свадьба в соседнем районе +870». Фудкорт (27.11): точку закрыли по жалобе -
-        // видно прямо в строке дохода, а не только под «Подробнее».
+        // видно прямо в строке дохода, а не только под «Подробнее». Второй этаж - с утренним завозом рядом.
         other: otherIncome(night).map((r): [string, number] => [
           r.id === 'van' && night.van
             ? `🚐 ${vanEventName(scene.state, night.van.event)}`
             : r.id === 'food' && night.food?.closed
               ? `${t(INCOME_KEYS.food)} (${t('fc.summaryClosed', { name: t(`fc.stall.${night.food.closed}` as TextKey) })})`
-              : t(INCOME_KEYS[r.id]),
+              : // Второй этаж: утренний завоз прямо в строке (деньги ушли утром, сумма строки - вечерние).
+                r.id === 'clothes' && night.clothes?.restock
+                ? `${t(INCOME_KEYS.clothes)} (${t('cl.summaryRestock', { n: night.clothes.restock })})`
+                : t(INCOME_KEYS[r.id]),
           r.n,
         ]),
         expected,

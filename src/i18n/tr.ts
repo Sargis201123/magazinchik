@@ -1847,7 +1847,7 @@ export const tr: Record<TextKey, string> = {
   "rental.kit.rain": "şemsiye",
   "rental.perDay": "Günü {n} 💰",
   "rental.stock": "Stantta {n} eşya var, dükkânla birlikte büyür",
-  "rental.yesterday": "Dün {n} kiralandı: +{last} 💰 · toplam: +{total} 💰",
+  "rental.yesterday": "Dün kiralanan {icon} ×{n}: +{last} 💰 · toplam: +{total} 💰",
   "rental.summary": "Kapıda kiralama",
   "rental.summaryValue": "{icon} {n} kiralama · +{sum} 💰",
   "rental.tap": "{icon} Bugün ~{n}/{max} kiralama · ~{sum} 💰",

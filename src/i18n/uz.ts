@@ -1859,7 +1859,7 @@ export const uz: Record<TextKey, string> = {
   "rental.kit.rain": "soyabon",
   "rental.perDay": "Kuniga {n} 💰",
   "rental.stock": "Stendda {n} ta narsa, u doʻkon bilan birga oʻsadi",
-  "rental.yesterday": "Kecha {n} ta olishdi: +{last} 💰 · jami: +{total} 💰",
+  "rental.yesterday": "Kecha olishdi {icon} ×{n}: +{last} 💰 · jami: +{total} 💰",
   "rental.summary": "Kirish oldidagi prokat",
   "rental.summaryValue": "{icon} {n} ta · +{sum} 💰",
   "rental.tap": "{icon} Bugun ~{n}/{max} ta olishadi · ~{sum} 💰",

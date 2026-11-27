@@ -135,9 +135,11 @@ export function rentalNight(state: StoreState, passers: number): { state: StoreS
 }
 
 /** Что принесла стойка в прошлый вечер (null — вчера не работала) и всего: для карточки. */
-export function rentalLog(state: StoreState): { n: number; last: number; total: number } | null {
+export function rentalLog(state: StoreState): { icon: string; n: number; last: number; total: number } | null {
   const last = state.rental?.last;
-  return last && last.day === state.day - 1 ? { n: last.rented, last: last.income, total: state.rental?.earned ?? last.income } : null;
+  // Значок вчерашнего набора: вчера зонты по 12, сегодня велосипеды по 30 - без него «30 шт.: +360» рядом с
+  // «16 из 30 - ~480» читалось как ошибка.
+  return last && last.day === state.day - 1 ? { icon: KIT_ICON[last.kit] ?? '', n: last.rented, last: last.income, total: state.rental?.earned ?? last.income } : null;
 }
 
 /** Что видно в мире: стойка есть, что на ней и какого она размера. Изменилось — сцена ставит стойку заново. */
