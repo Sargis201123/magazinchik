@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { HYPER_LEVEL } from '../src/game/economy';
 import { brandRect, brandSpotFor, iceboxRect, iceboxSpotFor, kioskSpot, layoutFor, licenseRect, licenseSpotFor, registerSpot, type Point, type Room } from '../src/scenes/layout';
 import { blockedZones, overlapsRect, standFor, tillZones } from '../src/scenes/placement';
-import { planHyperHall, reachableTargets, type HyperPiece } from '../src/scenes/hyperPlan';
+import { AISLE_H, planAisle, planHyperHall, reachableTargets, type HyperPiece } from '../src/scenes/hyperPlan';
 import type { Rect } from '../src/scenes/paths';
 
 // Низ зала гипермаркета (scenes/hyperHall.ts, 27.11): уголок аттракционов, сезонная фотозона и скамья встают в пустую
-// полосу между нижним рядом островов и входом, уступают место всему игровому и не отрезают проходы.
+// полосу между нижним рядом островов и входом, уступают место всему игровому и не отрезают проходы; главный проход к
+// кассам ложится в пол над нижним рядом островов.
 
 const L = layoutFor(HYPER_LEVEL);
 const REGISTERS = 5;
@@ -31,6 +32,13 @@ const taken: Rect[] = [
   { x: door.x - 20, y: h - 76, w: 40, h: 76 },
   ...[-46, -26, 26, 46].map((dx) => ({ x: door.x + dx - 11, y: h - 22, w: 22, h: 22 })),
   iceboxRect(iceboxSpotFor(L, REGISTERS, [], KIOSKS)),
+  // Места охранника, менеджера, грузчика и уборщицы (staff.workerHome): вокруг ног человека.
+  ...[
+    { x: door.x + 22, y: door.y - 14 },
+    { x: door.x - 24, y: door.y - 30 },
+    { x: L.warehouse.doorway.x + 6, y: L.warehouse.doorway.y - 18 },
+    { x: L.wc.x - 18, y: L.wc.spotY + 8 },
+  ].map((p) => ({ x: p.x - 7, y: p.y - 10, w: 14, h: 20 })),
 ];
 const rooms = [L.warehouse, L.bakery, L.coffee, L.kitchen].filter((r): r is Room => Boolean(r));
 const targets: Point[] = [
@@ -71,16 +79,46 @@ describe('низ зала гипермаркета', () => {
     for (const p of moved) expect(overlapsRect(p.body, shelf)).toBe(false);
   });
 
-  it('полка своей марки и витрина 18+ встают на свои места, а убранство - где осталось', () => {
-    const ice = [iceboxRect(iceboxSpotFor(L, REGISTERS, [], KIOSKS))];
-    const brand = brandRect(brandSpotFor(L, REGISTERS, ice, KIOSKS));
-    const license = licenseRect(licenseSpotFor(L, REGISTERS, [...ice, brand], KIOSKS));
-    const fixtures = [brand, license].map((r) => ({ ...r, h: r.h + 18 }));
+  const ice = [iceboxRect(iceboxSpotFor(L, REGISTERS, [], KIOSKS))];
+  const brand = brandRect(brandSpotFor(L, REGISTERS, ice, KIOSKS));
+  /** Полка своей марки и витрина 18+ на полу вместе с местом покупателя перед ними. */
+  const withStand = (r: Rect): Rect => ({ ...r, h: r.h + 18 });
+  const planWith = (fixtures: Rect[]) => {
     const plan = planHyperHall(L, [...taken, ...fixtures], obstacles, targets);
-    for (const p of plan) for (const r of fixtures) expect(overlapsRect(p.body, r)).toBe(false);
-    // Уголку слева места нет (там полка своей марки), скамье у касс - тоже (витрина 18+): обе находят другое место.
-    expect(plan.map((p) => p.id)).toEqual(['season', 'bench']);
+    for (const p of plan) {
+      for (const r of fixtures) expect(overlapsRect(p.body, r)).toBe(false);
+      expect(taken.some((r) => overlapsRect(p.body, r))).toBe(false);
+    }
     expect(reachableTargets(L, [...obstacles, ...blocks(plan)], entry, targets).every(Boolean)).toBe(true);
+    return plan;
+  };
+
+  /** Столик дегустации у полки своей марки (promoFx.tasteSpot): справа от неё. */
+  const tasting = { x: brand.x + 16 + 27 - 9, y: brand.y + 22 + 10 - 14, w: 18, h: 18 };
+
+  it('полка своей марки слева у входа - уголок поменьше между ней и проходом к двери, остальное на местах', () => {
+    const plan = planWith([withStand(brand), tasting]);
+    expect(plan.map((p) => [p.id, p.small === true])).toEqual([
+      ['kids', true],
+      ['season', false],
+      ['bench', false],
+    ]);
+  });
+
+  it('витрина 18+ у касс без полки своей марки - скамья у левой стены, все три вещи на месте', () => {
+    const license = licenseRect(licenseSpotFor(L, REGISTERS, ice, KIOSKS));
+    const plan = planWith([withStand(license)]);
+    expect(plan.map((p) => p.id)).toEqual(['kids', 'season', 'bench']);
+    const bench = plan.find((p) => p.id === 'bench')!;
+    expect(bench.x).toBeLessThan(L.door.x);
+  });
+
+  it('полка своей марки и витрина 18+ встают на свои места, а убранство - где осталось', () => {
+    const license = licenseRect(licenseSpotFor(L, REGISTERS, [...ice, brand], KIOSKS));
+    const plan = planWith([...[brand, license].map(withStand), tasting]);
+    // Уголок - поменьше (слева полка своей марки), скамье у касс места нет (витрина 18+), у левой стены - тоже.
+    expect(plan.map((p) => p.id)).toEqual(['kids', 'season']);
+    expect(plan[0].small).toBe(true);
   });
 
   it('вещь, которая закрыла бы последний проход, не ставится', () => {
@@ -95,5 +133,40 @@ describe('низ зала гипермаркета', () => {
     const plan = planHyperHall(L, [], wall, deep);
     expect(plan.some((p) => p.id === 'kids' && overlapsRect(p.body, { x: kids.x - 6, y: kids.y - 2, w: 12, h: 4 }))).toBe(false);
     expect(reachableTargets(L, [...wall, ...blocks(plan)], entry, deep)).toEqual([true]);
+  });
+});
+
+describe('главный проход к кассам', () => {
+  const keep = [...tillZones(L, REGISTERS, KIOSKS), ...blockedZones(L)];
+  /** Место под полку на полу: полка, вставка отдела и разметка «+». */
+  const spot = (p: Point): Rect => ({ x: p.x - 20, y: p.y - 16, w: 40, h: 36 });
+
+  it('ложится в проход над нижним рядом островов, от левой стены почти до касс', () => {
+    const aisle = planAisle(L, keep)!;
+    expect(aisle).not.toBeNull();
+    const band = { x: aisle.x0, y: aisle.y, w: aisle.x1 - aisle.x0, h: AISLE_H };
+    const rows = [...new Set(L.slots.map((p) => p.y))].sort((a, b) => a - b);
+    // Между двумя нижними рядами островов.
+    expect(aisle.y).toBeGreaterThan(rows[rows.length - 2]);
+    expect(aisle.y + AISLE_H).toBeLessThan(rows[rows.length - 1]);
+    expect(aisle.x0).toBeLessThanOrEqual(4);
+    // Правее нижнего ряда островов - к кассам.
+    const bottom = L.slots.filter((p) => p.y === rows[rows.length - 1]);
+    expect(aisle.x1).toBeGreaterThan(Math.max(...bottom.map((p) => p.x)) + 20);
+    for (const p of L.slots) expect(overlapsRect(band, spot(p))).toBe(false);
+    for (const r of keep) expect(overlapsRect(band, r)).toBe(false);
+  });
+
+  it('полки переставили поперёк прохода - полосы нет', () => {
+    const across = { ...L, slots: [...L.slots, ...[30, 80, 130, 180].map((x) => ({ x, y: 272 }))] };
+    expect(planAisle(across, keep)).toBeNull();
+  });
+
+  it('в проходе стоит витрина - полоса кончается перед ней, а слишком короткой не бывает', () => {
+    const showcase = (x: number) => ({ x, y: 262, w: 32, h: 36 });
+    const aisle = planAisle(L, [...keep, showcase(150)])!;
+    expect(aisle).not.toBeNull();
+    expect(aisle.x1).toBeLessThanOrEqual(150 - 4);
+    expect(planAisle(L, [...keep, showcase(60)])).toBeNull();
   });
 });

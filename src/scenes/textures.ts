@@ -761,9 +761,12 @@ export const SPRITES = [
   'vending_side',
   'pallet_water',
   'promo',
-  // Низ зала гипермаркета (art/hyper_hall.py, scenes/hyperHall.ts): уголок аттракционов, сезонная фотозона, скамья у касс.
+  // Низ зала гипермаркета (art/hyper_hall.py, scenes/hyperHall.ts): уголок аттракционов, сезонная фотозона, скамья у
+  // касс, главный проход к кассам.
   'hyper_kidsmat',
+  'hyper_kidsmat_s',
   'hyper_ride',
+  'hyper_rocket',
   'hyper_claw',
   'hyper_claw_lit',
   'hyper_capsule',
@@ -771,7 +774,11 @@ export const SPRITES = [
   'hyper_season_spring',
   'hyper_season_summer',
   'hyper_season_autumn',
+  'hyper_season_snow',
   'hyper_bench',
+  'hyper_aisle',
+  'hyper_aisle_l',
+  'hyper_aisle_r',
   'paving',
   'tree',
   'bush',

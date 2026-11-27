@@ -1,8 +1,9 @@
 """Гипермаркет: низ торгового зала (27.11, слабое место «в гипермаркете нижняя половина зала пустая»).
 
 Между нижним рядом островов и входом в гипермаркете оставалась голая плитка. Здесь - то, чем в большом магазине
-обжита зона у входа: уголок аттракционов (машинка-качалка и автомат с игрушками на мягком коврике), сезонная
-фотозона на круглом подиуме и скамья вокруг кадки с деревцем. Товара на них нет - игроки не примут их за полки
+обжита зона у входа: уголок аттракционов (автоматы и качалки на резиновом коврике с дорогой - не мягкий пазл
+детской зоны фудкорта), сезонная фотозона на круглом подиуме и скамья вокруг кадки с деревцем; выше, через весь
+зал к кассам, - главный проход из терракотовой плитки. Товара на них нет - игроки не примут их за полки
 (островные витрины с товаром убрали 08.11 именно поэтому). Сцена - src/scenes/hyperHall.ts.
 
 Палитра Endesga 32 (art/sprites.py), контур #181425, свет сверху слева, двойная детализация: в мире всё вдвое меньше.
@@ -10,14 +11,21 @@
     python3 art/hyper_hall.py
 
 Картинки (размеры - в пикселях рисунка):
-  hyper_kidsmat        128×68  мягкий коврик-пазл уголка аттракционов (лежит на полу: без контура, нижний край - толщина);
+  hyper_kidsmat        128×68  резиновый коврик уголка: синяя резина, дорога кольцом с «зеброй», газон с прудом,
+                               жёлтый бортик (лежит на полу: без контура, нижний край - толщина);
+  hyper_kidsmat_s       88×56  он же поменьше - когда слева у входа стоит полка своей марки;
   hyper_ride            46×40  машинка-качалка на подставке с монетоприёмником (смотрит вправо);
+  hyper_rocket          30×50  ракета-качалка на пружине, подставка с жёлтой полосой и монетоприёмником;
   hyper_claw            30×56  автомат с игрушками: вывеска с лампочками, стекло, клешня, пульт, окошко выдачи;
   hyper_claw_lit        30×56  лампочки вывески и подсветка стекла (мигают сценой; вечером светят);
   hyper_capsule         20×36  автомат с игрушками-капсулами: два ящика с окошками друг на друге;
-  hyper_season_<время>  76×60  сезонная фотозона на подиуме: winter - ёлочка и подарки, spring - клумба с тюльпанами,
-                               summer - зонт, шезлонг и мяч на песке, autumn - стог, тыквы и ящик яблок;
-  hyper_bench           68×50  скамья вокруг кадки с деревцем (зона отдыха у касс).
+  hyper_season_<время>  80×63  сезонная фотозона на подиуме с тенью на полу: winter - ёлочка и подарки, spring -
+                               клумба с тюльпанами и лейкой, summer - зонт, шезлонг и мяч на песке, autumn - стог,
+                               тыквы и ящик яблок; snow - зима без ёлки (снеговик и санки с подарками), когда у входа
+                               уже стоит новогодняя ёлка из украшений;
+  hyper_bench           68×50  скамья вокруг кадки с деревцем (зона отдыха у касс);
+  hyper_aisle          128×48  кусок главного прохода к кассам (без швов слева и справа, сцена тянет его полосой);
+  hyper_aisle_l/_r       4×48  торцы прохода.
 """
 
 import random
@@ -51,39 +59,68 @@ def finish(c, name, shadow=None, outline=True):
 # ---------------------------------------------------------------- уголок аттракционов
 
 
-def kidsmat():
-    """Коврик-пазл 128×68 (64×34 точки мира): крупные мягкие квадраты в пастельных тонах с замками, светлый валик по
-    краю. Лежит на полу - контура нет, толщину даёт тёмный нижний край."""
-    w, h = 128, 68
+def kidsmat(w=128, h=68, name="hyper_kidsmat"):
+    """Резиновый коврик уголка аттракционов w×h (в мире вдвое меньше): синяя резина с напечатанной дорогой-кольцом,
+    пунктиром посередине и «зеброй» спереди, внутри кольца - газон с прудиком; по краю - жёлтый мягкий бортик (как у
+    площадок у входа в большие магазины). Не пазл детской зоны фудкорта. Лежит на полу: без контура, толщину даёт
+    тёмный нижний край."""
     m = Canvas(w, h)
-    tiles = [H("#f6757a"), H("#feae34"), H("#2ce8f5"), H("#63c74d"), H("#b55088"), H("#0099db")]
-    soft = [mix(t, WHITE, 0.32) for t in tiles]
-    m.round_rect(0, 0, w, h - 2, WHITE, r=4)
-    m.round_rect(0, 2, w, h - 2, PALE, r=4)
-    m.round_rect(1, 1, w - 2, h - 4, WHITE, r=3)
-    cell_w, cell_h = 17, 15
-    for gy in range(4):
-        for gx in range(7):
-            tone = soft[(gx + gy * 2) % len(soft)]
-            x, y = 3 + gx * cell_w, 3 + gy * cell_h
-            m.rect(x, y, cell_w, cell_h, tone)
-            m.hline(x, y, cell_w, lit(tone, 0.35))
-            m.vline(x, y, cell_h, lit(tone, 0.18))
-            m.hline(x, y + cell_h - 1, cell_w, lit(tone, -0.12))
-    # Замки пазла: выступ каждой плитки вправо и вниз, в соседнюю (поверх уже уложенных).
-    for gy in range(4):
-        for gx in range(7):
-            tone = soft[(gx + gy * 2) % len(soft)]
-            x, y = 3 + gx * cell_w, 3 + gy * cell_h
-            if gx < 6:
-                m.rect(x + cell_w, y + 5, 2, 4, tone)
-            if gy < 3:
-                m.rect(x + 7, y + cell_h, 4, 2, tone)
-    # Толщина коврика: тёмный нижний край и правый торец (свет сверху слева).
-    m.hline(3, h - 3, w - 6, STEEL)
-    m.hline(4, h - 2, w - 8, METAL)
-    m.vline(w - 2, 4, h - 8, STEEL)
-    m.save("hyper_kidsmat")
+    rubber, rubber_l = BLUE_D, lit(BLUE_D, 0.12)
+    road, road_l = METAL, lit(METAL, 0.12)
+    # Толщина: тёмный низ и правый торец бортика.
+    m.round_rect(0, 2, w, h - 2, lit(ORANGE, -0.35), r=5)
+    m.round_rect(0, 0, w, h - 2, GOLD, r=5)
+    m.hline(5, 0, w - 10, GOLD_L)
+    m.vline(0, 5, h - 12, GOLD_L)
+    m.hline(5, h - 4, w - 10, ORANGE)
+    m.vline(w - 1, 5, h - 12, ORANGE)
+    # Резина: тёмно-синяя, с крошкой.
+    m.round_rect(3, 3, w - 6, h - 9, rubber, r=3)
+    m.hline(5, 3, w - 10, lit(rubber, -0.25))
+    m.vline(3, 5, h - 13, lit(rubber, -0.25))
+    m.speckle(4, 4, w - 8, h - 11, [rubber_l, lit(rubber, -0.12)], w * h // 20, 7)
+    # Дорога кольцом: асфальт со светлой обочиной слева сверху.
+    x0, y0, x1, y1, lane = 8, 7, w - 8, h - 12, 10
+    m.round_rect(x0, y0, x1 - x0, y1 - y0, road, r=6)
+    m.speckle(x0 + 1, y0 + 1, x1 - x0 - 2, y1 - y0 - 2, [road_l, lit(road, -0.1)], w * h // 34, 8)
+    # Газон внутри кольца, пруд и пара кустиков.
+    ix0, iy0, ix1, iy1 = x0 + lane, y0 + lane, x1 - lane, y1 - lane
+    m.round_rect(ix0, iy0, ix1 - ix0, iy1 - iy0, GREEN_D, r=3)
+    m.hline(ix0 + 2, iy0, ix1 - ix0 - 4, GREEN)
+    m.vline(ix0, iy0 + 2, iy1 - iy0 - 4, GREEN)
+    m.speckle(ix0 + 1, iy0 + 1, ix1 - ix0 - 2, iy1 - iy0 - 2, [lit(GREEN_D, 0.12), lit(GREEN_D, -0.12)], (ix1 - ix0) * (iy1 - iy0) // 16, 9)
+    pcx, pcy = ix0 + (ix1 - ix0) * 0.68, iy0 + (iy1 - iy0) * 0.55
+    m.ellipse(pcx, pcy, (ix1 - ix0) * 0.17, (iy1 - iy0) * 0.26, BLUE)
+    m.ellipse(pcx - 1, pcy - 1, (ix1 - ix0) * 0.12, (iy1 - iy0) * 0.16, SKY)
+    m.px(int(pcx) - 3, int(pcy) - 2, WHITE)
+    for bx, by in ((ix0 + 6, iy0 + 5), (ix0 + 13, iy1 - 6)):
+        m.ellipse(bx, by, 3, 2.4, GREEN)
+        m.px(bx - 1, by - 1, lit(GREEN, 0.4))
+    # Бордюр: светлая кромка вокруг газона и по внешнему краю дороги.
+    m.frame(ix0 - 1, iy0 - 1, ix1 - ix0 + 2, iy1 - iy0 + 2, PALE)
+    for x in range(x0 + 4, x1 - 4):
+        m.px(x, y0, PALE)
+        m.px(x, y1 - 1, STEEL)
+    for y in range(y0 + 4, y1 - 4):
+        m.px(x0, y, PALE)
+        m.px(x1 - 1, y, STEEL)
+    # Пунктир посередине дороги.
+    mid = lane // 2
+    for x in range(x0 + 8, x1 - 8):
+        if (x // 4) % 2 == 0:
+            m.px(x, y0 + mid, WHITE)
+            m.px(x, y1 - mid - 1, WHITE)
+    for y in range(y0 + 8, y1 - 8):
+        if (y // 4) % 2 == 0:
+            m.px(x0 + mid, y, WHITE)
+            m.px(x1 - mid - 1, y, WHITE)
+    # «Зебра» на ближней дороге, слева от середины: белые полосы поперёк, без пунктира под ними.
+    zx = x0 + (x1 - x0) // 5
+    for k in range(5):
+        m.rect(zx + k * 3, y1 - lane + 1, 2, lane - 2, WHITE)
+        m.vline(zx + k * 3 + 1, y1 - lane + 1, lane - 2, PALE)
+    m.hline(zx + 15, y1 - mid - 1, 2, road)
+    m.save(name)
 
 
 def ride():
@@ -281,14 +318,85 @@ def capsule():
     finish(c, "hyper_capsule", (10, 34, 9, 2))
 
 
+def rocket():
+    """Ракета-качалка 30×50 на пружине: белый корпус с красным носом и красными крыльями, круглый иллюминатор,
+    сопло снизу; пружина на круглой синей подставке с жёлтой полосой (как у машинки) и жёлтым монетоприёмником."""
+    c = Canvas(30, 50)
+    # Подставка: овал с жёлтой полосой и тёмным цоколем.
+    c.round_rect(1, 42, 28, 6, BLUE, r=3)
+    c.hline(3, 42, 24, lit(BLUE, 0.4))
+    c.hline(2, 45, 26, GOLD)
+    c.hline(3, 44, 24, GOLD_L)
+    c.round_rect(2, 46, 26, 3, BLUE_D, r=1)
+    # Пружина: витки серебром, свет слева.
+    for k, y in enumerate(range(36, 43, 2)):
+        c.hline(12, y, 7, PALE if k % 2 == 0 else STEEL)
+        c.px(12, y, WHITE)
+        c.px(18, y, METAL)
+        c.hline(13, y + 1, 5, METAL_D)
+    # Монетоприёмник на подставке слева спереди.
+    c.rect(3, 37, 6, 6, GOLD)
+    c.vline(3, 37, 6, GOLD_L)
+    c.vline(8, 38, 5, ORANGE)
+    c.vline(5, 38, 2, INK)
+    c.px(6, 41, RED)
+    # Крылья: красные, по бокам низа корпуса.
+    for side in (-1, 1):
+        for k in range(8):
+            x = 15 + side * (5 + k // 2)
+            c.vline(x, 26 + k, 9 - k // 2, RED if side < 0 else RED_D)
+            if side > 0:
+                c.vline(x + 1, 26 + k, 9 - k // 2, RED_D)
+    # Корпус: белый, справа тень, сверху красный нос.
+    c.round_rect(10, 8, 11, 27, WHITE, r=3)
+    c.vline(19, 10, 24, PALE)
+    c.vline(20, 11, 22, STEEL)
+    for k in range(8):
+        half = (k + 2) // 2
+        c.hline(15 - half, 1 + k, half * 2 + 1, RED)
+        c.px(15 + half, 1 + k, RED_D)
+    c.px(15, 0, RED)
+    c.hline(11, 8, 9, RED)
+    c.hline(11, 9, 9, RED_D)
+    c.px(13, 3, lit(RED, 0.45))
+    c.px(12, 5, lit(RED, 0.45))
+    # Иллюминатор с бликом.
+    c.ellipse(15.5, 16, 3.6, 3.6, STEEL)
+    c.ellipse(15.5, 16, 2.6, 2.6, SKY)
+    c.px(14, 15, WHITE)
+    c.px(15, 14, WHITE)
+    c.px(17, 17, BLUE)
+    # Полоса и сопло.
+    c.hline(10, 25, 11, RED)
+    c.hline(10, 26, 11, RED_D)
+    c.rect(12, 34, 7, 2, METAL)
+    c.hline(12, 34, 7, STEEL)
+    c.px(11, 13, WHITE)
+    c.vline(11, 12, 12, WHITE)
+    finish(c, "hyper_rocket", (15, 47, 13, 2))
+
+
 # ---------------------------------------------------------------- сезонная фотозона
 
-SEASON_W, SEASON_H = 76, 60
+SEASON_W, SEASON_H = 76, 63
+# Низ подиума (без контура) - строка 59: ниже - контур и тень на полу.
+PODIUM_BASE = 60
+# Готовая картинка шире рисунка на 2 точки с каждой стороны: тень уходит вправо-вниз (свет сверху слева).
+SEASON_OUT_W = SEASON_W + 4
+
+
+def finish_season(c, name):
+    """Контур, как у всех спрайтов, и мягкая тень подиума на полу: сдвинута вправо и вниз, видна узким серпом."""
+    c.outline(INK)
+    out = Canvas(SEASON_OUT_W, SEASON_H)
+    out.ellipse(SEASON_OUT_W / 2 + 2, PODIUM_BASE - 2, 37, 5, (24, 20, 37, 70))
+    out.img.alpha_composite(c.img, (2, 0))
+    out.save(name)
 
 
 def podium(c, top, edge, skirt):
     """Круглый низкий подиум (низ картинки): верх-тарелка top, кант edge, бок skirt с полосой."""
-    cx, cy = SEASON_W / 2, SEASON_H - 11
+    cx, cy = SEASON_W / 2, PODIUM_BASE - 11
     c.ellipse(cx, cy + 4, 36, 7, lit(skirt, -0.25))
     c.rect(2, int(cy), SEASON_W - 4, 4, skirt)
     c.ellipse(cx, cy + 3, 36, 6.6, skirt)
@@ -356,7 +464,72 @@ def season_winter():
         c.px(x, 37 + (x - 10) // 3, PALE)
     c.rect(11, 25, 7, 3, NAVY)
     c.hline(10, 27, 9, NAVY)
-    finish(c, "hyper_season_winter", (38, 55, 34, 3))
+    finish_season(c, "hyper_season_winter")
+
+
+def season_snow():
+    """Зима без ёлки (у входа уже стоит новогодняя ёлка из украшений): большой снеговик в шляпе-ведре, два
+    леденца-трости в снегу и деревянные санки с горкой подарков."""
+    c = Canvas(SEASON_W, SEASON_H)
+    podium(c, WHITE, PALE, BLUE)
+    rnd = random.Random(33)
+    for _ in range(14):
+        x, y = rnd.randrange(8, 68), rnd.randrange(44, 52)
+        if c.get(x, y)[:3] == WHITE[:3]:
+            c.px(x, y, mix(PALE, WHITE, 0.5))
+    # Леденцы-трости сзади: красно-белые крючки.
+    for cx0, top in ((40, 24), (7, 28)):
+        for y in range(top + 3, 46):
+            c.px(cx0, y, RED if (y // 2) % 2 else WHITE)
+            c.px(cx0 + 1, y, RED_D if (y // 2) % 2 else PALE)
+        for dx, dy, tone in ((0, 2, WHITE), (0, 1, RED), (1, 0, WHITE), (2, 0, RED), (3, 0, WHITE), (4, 1, RED), (4, 2, WHITE), (4, 3, RED)):
+            c.px(cx0 + dx, top + dy, tone)
+    # Снеговик: три кома (свет слева - справа тень), шляпа-ведро, нос-морковка, шарф, руки-веточки.
+    sx = 27
+    for cy0, r in ((41, 8.5), (29, 6.4), (19, 4.8)):
+        c.ellipse(sx, cy0, r, r * 0.92, PALE)
+        c.ellipse(sx - 0.8, cy0 - 0.8, r - 1.1, r * 0.92 - 1.1, WHITE)
+    c.px(sx - 3, 37, PALE)
+    c.px(sx + 4, 44, PALE)
+    c.px(sx - 2, 17, INK)
+    c.px(sx + 1, 17, INK)
+    c.hline(sx + 1, 19, 4, ORANGE)
+    c.px(sx + 1, 20, lit(ORANGE, -0.25))
+    for y in (27, 30, 38, 42):
+        c.px(sx, y, INK)
+    c.hline(sx - 5, 23, 11, RED)
+    c.hline(sx - 4, 24, 9, RED_D)
+    c.rect(sx + 3, 24, 2, 5, RED)
+    c.px(sx + 4, 28, RED_D)
+    c.rect(sx - 4, 10, 8, 5, BLUE)
+    c.vline(sx - 4, 10, 5, lit(BLUE, 0.4))
+    c.vline(sx + 3, 10, 5, BLUE_D)
+    c.hline(sx - 5, 15, 10, BLUE_D)
+    c.line(sx - 6, 28, sx - 12, 22, BARK)
+    c.px(sx - 12, 21, BARK)
+    c.px(sx - 13, 23, BARK)
+    c.line(sx + 6, 29, sx + 10, 25, BARK)
+    c.px(sx + 11, 24, BARK)
+    c.px(sx + 9, 24, BARK)
+    # Санки справа: деревянные, полозья загнуты спереди, на них горка подарков.
+    c.hline(46, 47, 22, WOOD_D)
+    c.px(68, 46, WOOD_D)
+    c.px(69, 45, WOOD_D)
+    c.px(69, 44, WOOD_D)
+    c.rect(47, 42, 20, 3, WOOD)
+    c.hline(47, 42, 20, SAND)
+    c.hline(47, 44, 20, BARK)
+    for lx in (49, 64):
+        c.vline(lx, 45, 2, BARK)
+    for x, y, bw, bh, box, rib in ((48, 32, 10, 10, RED, GOLD_L), (58, 34, 8, 8, GREEN, WHITE), (51, 25, 8, 7, BLUE, GOLD_L), (59, 29, 6, 5, PURPLE, WHITE)):
+        c.rect(x, y, bw, bh, box)
+        c.hline(x, y, bw, lit(box, 0.35))
+        c.vline(x + bw - 1, y + 1, bh - 1, lit(box, -0.3))
+        c.vline(x + bw // 2, y, bh, rib)
+        c.hline(x, y + bh // 2, bw, rib)
+        c.px(x + bw // 2 - 1, y - 1, rib)
+        c.px(x + bw // 2 + 1, y - 1, rib)
+    finish_season(c, "hyper_season_snow")
 
 
 def season_spring():
@@ -396,14 +569,6 @@ def season_spring():
             c.px(x + 1, top - 1, tone)
             c.px(x - 1, top, lit(tone, 0.45))
             c.px(x + 1, top + 2, lit(tone, -0.3))
-    # Лейка справа.
-    c.rect(63, 30, 8, 7, SKY)
-    c.hline(63, 30, 8, lit(SKY, 0.5))
-    c.vline(70, 31, 6, BLUE)
-    c.line(62, 32, 58, 28, BLUE)
-    c.px(57, 27, BLUE)
-    c.px(56, 27, BLUE)
-    c.hline(64, 28, 6, BLUE)
     # Белый заборчик по переднему краю.
     for x in range(8, 70, 5):
         dy = round(3 * ((x - 38) / 34) ** 2)
@@ -412,7 +577,20 @@ def season_spring():
     for x in range(8, 70):
         dy = round(3 * ((x - 38) / 34) ** 2)
         c.px(x, 50 + dy - 1, PALE)
-    finish(c, "hyper_season_spring", (38, 55, 34, 3))
+    # Лейка - на краю подиума справа спереди, перед заборчиком: дно на кромке, носик к тюльпанам.
+    c.rect(60, 47, 8, 7, SKY)
+    c.hline(60, 47, 8, lit(SKY, 0.5))
+    c.vline(60, 48, 6, lit(SKY, 0.3))
+    c.vline(67, 48, 6, BLUE)
+    c.hline(60, 53, 8, BLUE)
+    c.line(59, 49, 55, 45, BLUE)
+    c.px(54, 44, BLUE)
+    c.px(53, 44, BLUE)
+    c.px(54, 45, lit(BLUE, 0.3))
+    c.hline(61, 45, 6, BLUE)
+    c.px(61, 46, BLUE)
+    c.px(66, 46, BLUE)
+    finish_season(c, "hyper_season_spring")
 
 
 def season_summer():
@@ -446,20 +624,20 @@ def season_summer():
     c.px(30, 0, RED)
     c.px(31, 0, RED)
     c.px(30, 1, RED)
-    # Шезлонг справа: синяя полосатая ткань на деревянной раме, спинка поднята.
-    c.line(42, 44, 50, 34, WOOD_D)
-    c.line(66, 44, 62, 40, WOOD_D)
-    c.line(48, 44, 66, 40, BARK)
-    for k in range(4):
-        tone = BLUE if k % 2 == 0 else WHITE
-        c.line(50 + k * 4, 38 - k * 0, 52 + k * 4, 41, tone)
+    # Шезлонг справа: синяя полосатая ткань, спинка поднята слева и откинута назад; короткие ножки; под сиденьем -
+    # мягкая тень на песке (тон песка темнее, без линий).
+    c.ellipse(57, 43.5, 11, 1.8, lit(CREAM, -0.14))
+    c.ellipse(56, 43.5, 7, 1.2, lit(CREAM, -0.2))
+    for lx in (48, 53, 64):
+        c.vline(lx, 41, 2, WOOD_D)
     for y in range(30, 41):
-        x0 = 48 + (40 - y) // 2
+        x0 = 44 + (y - 30) * 4 // 10
         c.hline(x0, y, 4, BLUE if (y // 2) % 2 else WHITE)
-    c.rect(52, 38, 14, 3, BLUE)
-    c.hline(52, 38, 14, lit(BLUE, 0.4))
-    c.hline(52, 40, 14, BLUE_D)
-    for x in range(54, 66, 4):
+        c.px(x0 + 3, y, lit(BLUE if (y // 2) % 2 else WHITE, -0.18))
+    c.rect(50, 38, 16, 3, BLUE)
+    c.hline(50, 38, 16, lit(BLUE, 0.4))
+    c.hline(50, 40, 16, BLUE_D)
+    for x in range(53, 66, 4):
         c.vline(x, 38, 3, WHITE)
     # Надувной круг слева.
     c.ellipse(15, 44, 8, 4.2, PINK)
@@ -483,7 +661,7 @@ def season_summer():
     c.rect(22, 50, 5, 4, GOLD)
     c.hline(22, 50, 5, GOLD_L)
     c.vline(26, 46, 4, GREEN)
-    finish(c, "hyper_season_summer", (38, 55, 34, 3))
+    finish_season(c, "hyper_season_summer")
 
 
 def season_autumn():
@@ -531,7 +709,7 @@ def season_autumn():
     for x, y, tone in leaves:
         for dx, dy in ((1, 0), (0, 1), (1, 1), (2, 1), (1, 2)):
             c.px(x + dx, y + dy, tone)
-    finish(c, "hyper_season_autumn", (38, 55, 34, 3))
+    finish_season(c, "hyper_season_autumn")
 
 
 # ---------------------------------------------------------------- скамья у касс
@@ -583,16 +761,86 @@ def bench():
     finish(c, "hyper_bench", (34, 47, 31, 2))
 
 
+# ---------------------------------------------------------------- главный проход к кассам
+
+AISLE_W, AISLE_H = 128, 48
+# Тёплая терракота: не серая, как разметка «+» свободных мест под полки, и спокойнее вставок отделов.
+TERRA = mix(TAN, CREAM, 0.48)
+TERRA_L = lit(TERRA, 0.1)
+TERRA_D = lit(TERRA, -0.03)
+RIM = BARK
+GROUT = mix(lit(RIM, 0.35), TERRA, 0.45)
+CHEVRON = mix(CREAM, WHITE, 0.45)
+
+
+def aisle_rows(c, x, w):
+    """Кайма дорожки сверху и снизу на ширину w: тёмная затирка снаружи, полоса каймы, фаска (свет сверху)."""
+    for y, tone in ((0, lit(RIM, -0.25)), (1, lit(RIM, 0.3)), (2, RIM), (AISLE_H - 3, RIM), (AISLE_H - 2, lit(RIM, -0.15)), (AISLE_H - 1, lit(RIM, -0.25))):
+        c.hline(x, y, w, tone)
+
+
+def aisle():
+    """Главный проход к кассам 128×48 (в мире 64×24), кусок полосы без швов по краям: крупная терракотовая плитка
+    вперевязку, коричневая кайма сверху и снизу и посередине - светлая сливочная стрелка «›» к кассам. Лежит в полу,
+    как вставки отделов (без контура). Сцена тянет его полосой от левой стены до касс и закрывает торцами
+    hyper_aisle_l / hyper_aisle_r."""
+    c = Canvas(AISLE_W, AISLE_H)
+    rnd = random.Random(91)
+    tones = {}
+    top, rows, tile_w = 3, 2, 32
+    tile_h = (AISLE_H - 6) // rows
+    for y in range(top, top + rows * tile_h):
+        row = (y - top) // tile_h
+        shift = 16 if row % 2 else 0
+        for x in range(AISLE_W):
+            col = ((x + shift) % AISLE_W) // tile_w
+            tone = tones.setdefault((row, col), rnd.choice((TERRA, TERRA, TERRA_L, TERRA_D)))
+            lx, ly = (x + shift) % tile_w, (y - top) % tile_h
+            if lx == tile_w - 1 or ly == tile_h - 1:
+                tone = GROUT
+            elif lx == 0 or ly == 0:
+                tone = lit(tone, 0.18)
+            c.px(x, y, tone)
+    # Крапинки в плитке - редкие, чтобы пол не пестрил.
+    for _ in range(70):
+        x, y = rnd.randrange(AISLE_W), rnd.randrange(top, top + rows * tile_h)
+        if c.get(x, y)[:3] != GROUT[:3]:
+            c.px(x, y, lit(c.get(x, y), rnd.choice((-0.14, 0.2))))
+    aisle_rows(c, 0, AISLE_W)
+    # Стрелка «›» к кассам: сливочная вставка, блик сверху слева, тень снизу справа.
+    cx, cy = AISLE_W // 2, AISLE_H // 2
+    for k in range(20):
+        x0 = cx - 6 + min(k, 19 - k)
+        y = cy - 10 + k
+        c.hline(x0, y, 5, CHEVRON)
+        c.px(x0, y, lit(CHEVRON, 0.3) if k < 10 else CHEVRON)
+        c.px(x0 + 4, y, lit(CHEVRON, -0.18) if k >= 10 else CHEVRON)
+    c.save("hyper_aisle")
+    # Торцы: слева - светлая фаска (свет слева), справа - тёмная.
+    for side in ("l", "r"):
+        e = Canvas(4, AISLE_H)
+        aisle_rows(e, 0, 4)
+        cols = [lit(RIM, -0.25), lit(RIM, 0.3), RIM, RIM] if side == "l" else [RIM, RIM, lit(RIM, -0.15), lit(RIM, -0.25)]
+        for x, tone in enumerate(cols):
+            e.vline(x, 1 if side == "l" else 2, AISLE_H - 2 if side == "l" else AISLE_H - 3, tone)
+        e.vline(0 if side == "l" else 3, 0, AISLE_H, lit(RIM, -0.25))
+        e.save(f"hyper_aisle_{side}")
+
+
 def main():
     kidsmat()
+    kidsmat(88, 56, "hyper_kidsmat_s")
     ride()
     claw()
     capsule()
+    rocket()
     season_winter()
+    season_snow()
     season_spring()
     season_summer()
     season_autumn()
     bench()
+    aisle()
 
 
 if __name__ == "__main__":
