@@ -148,11 +148,11 @@ export interface SimDay {
   wanted: number;
   served: number;
   lost: number;
-  /** Из обслуженных — гости «на бегу» (traffic.ts, только с hall): зал полон, пробили кассы без хозяина. */
+  /** Из обслуженных - гости «на бегу» (traffic.ts, только с hall): зал полон, пробили кассы без хозяина. */
   quick: number;
   /** Ушли ни с чем у пустой полки (в зале и «на бегу»). */
   empty: number;
-  /** Ходки со склада на полки за день: грузчик и ученик (loader.ts), а без грузчика — хозяин. */
+  /** Ходки со склада на полки за день: грузчик и ученик (loader.ts), а без грузчика - хозяин. */
   trips: number;
   revenue: number;
   purchases: number;
@@ -251,10 +251,10 @@ export interface SimOptions {
    */
   zar?: { from: number; every: number; cap?: number };
   /**
-   * «Трафик v2» (hall.ts, traffic.ts): зал пропускает за день hallCap гостей, остальные берут своё «на бегу» (1–2 товара,
-   * пустая полка — похожее) и идут к кассам без хозяина — сменщик, кассиры, киоски (autoCapacity); кому не хватило
-   * касс — уходят. Без таких касс лишние проходят мимо. Ночью потока нет — ночных гостей тоже держит зал.
-   * Закупка — на тех, кого пробьют (зал + кассы без хозяина), а не на всех позванных.
+   * «Трафик v2» (hall.ts, traffic.ts): зал пропускает за день hallCap гостей, остальные берут своё «на бегу» (1-2 товара,
+   * пустая полка - похожее) и идут к кассам без хозяина - сменщик, кассиры, киоски (autoCapacity); кому не хватило
+   * касс - уходят. Без таких касс лишние проходят мимо. Ночью потока нет - ночных гостей тоже держит зал.
+   * Закупка - на тех, кого пробьют (зал + кассы без хозяина), а не на всех позванных.
    * По умолчанию выключен: на прогонах без предела зала откалиброваны проверки баланса (tests/balance*).
    */
   hall?: boolean;
@@ -977,7 +977,7 @@ export function simulate({
       state = early.state;
       purchases += early.spent;
     }
-    // С пределом зала закупка — на тех, кого пробьют (зал + кассы без хозяина): 27.11, разбор симулятора — на всех
+    // С пределом зала закупка - на тех, кого пробьют (зал + кассы без хозяина): 27.11, разбор симулятора - на всех
     // позванных он закупал вдвое-втрое лишнего (порча, минус на «Минимаркете», банкротства у «базового» игрока).
     const buyFor = hall ? Math.min(guestsToday(state), hallCap(state) + autoCapacity(state)) : guestsToday(state);
     if (buyMode === 'auto' && autoActive(state)) {
@@ -1111,21 +1111,21 @@ export function simulate({
     // Оплата кафе — тоже выручка дня (деньги уже зачислены при отгрузке).
     stats.revenue += cafeIncome;
     const wantedGuests = Math.max(0, Math.round(guests * (0.85 + random() * 0.3)));
-    // «Трафик v2»: в зал — сколько он пропускает, остальные «на бегу» к кассам без хозяина (если такие кассы есть).
+    // «Трафик v2»: в зал - сколько он пропускает, остальные «на бегу» к кассам без хозяина (если такие кассы есть).
     const autoCap = hall ? autoCapacity(state) : 0;
     const hallGuests = hall ? Math.min(wantedGuests, hallCap(state)) : wantedGuests;
     const quickGuests = autoCap > 0 ? wantedGuests - hallGuests : 0;
     const dayGuests = hallGuests + quickGuests;
     // Один игрок не успевает всё: чем больше магазин, тем больше теряется без персонала.
     const has = (r: StaffRole) => Boolean(staffOf(state, r));
-    // Хозяин без грузчика носит со склада сам, когда заметит пустую полку: столько ходок за день. Без предела зала —
-    // по-старому (на этом откалиброваны проверки баланса, tests/balance*, и цифры docs/BALANCE.md): грузчик — 60 таких
-    // ходок, ученик на складе (apprentice.ts) — ещё несколько.
+    // Хозяин без грузчика носит со склада сам, когда заметит пустую полку: столько ходок за день. Без предела зала -
+    // по-старому (на этом откалиброваны проверки баланса, tests/balance*, и цифры docs/BALANCE.md): грузчик - 60 таких
+    // ходок, ученик на складе (apprentice.ts) - ещё несколько.
     let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? (hall ? 0 : 60) : 3 + state.level;
     if (!hall) trips += Math.round(apprStockPace(state) * 6);
-    // «Трафик v2»: грузчик и ученик на складе носят по времени, как в сцене (loader.ts): ходка — путь по залу помещения,
+    // «Трафик v2»: грузчик и ученик на складе носят по времени, как в сцене (loader.ts): ходка - путь по залу помещения,
     // делённый на их скорость; несут тележку сотрудника (staffCarry) на самую пустую полку. 27.11: раньше и здесь стояло
-    // «60 ходок за день», а в сцене грузчик успевал 9-25, — симулятор не видел, что полки пустеют.
+    // «60 ходок за день», а в сцене грузчик успевал 9-25, - симулятор не видел, что полки пустеют.
     const loaderM = hall ? staffOf(state, 'loader') : undefined;
     const stockRate = hall ? ((loaderM ? loaderPace(state, loaderM) : 0) + apprStockPace(state) * levelPace(state)) / tripSeconds(state) : 0;
     let stockClock = 0;
@@ -1201,11 +1201,11 @@ export function simulate({
       stats.dishes = (stats.dishes ?? 0) + 1;
       return DISHES[dish.dish].price;
     };
-    // Время дня (секунды) — для ходок со склада и касс «на бегу».
+    // Время дня (секунды) - для ходок со склада и касс «на бегу».
     let clock = 0;
     let hallServed = 0;
     let quickServed = 0;
-    // Гостей зала у кассиров, сменщика и киосков — эта доля: их время касс уходит и на поток «на бегу».
+    // Гостей зала у кассиров, сменщика и киосков - эта доля: их время касс уходит и на поток «на бегу».
     const autoShare = autoCap > 0 ? autoCap / (autoCap + capacity.owner) : 0;
     /** Прошло dt секунд: грузчик и ученик сделали свои ходки (несут на самую пустую полку, где есть что положить). */
     const stockTick = (dt: number) => {
@@ -1214,7 +1214,7 @@ export function simulate({
       stockClock += stockRate * dt;
       while (stockClock >= 1) {
         const index = shelfToFill(state);
-        // Нести нечего — ждут у склада: впрок ходки не копятся, следующая начнётся, когда понадобится.
+        // Нести нечего - ждут у склада: впрок ходки не копятся, следующая начнётся, когда понадобится.
         if (index < 0) {
           stockClock = 0;
           break;
@@ -1245,9 +1245,9 @@ export function simulate({
       }
     };
     /**
-     * Гость «на бегу» (traffic.ts quickPick, как в сцене trafficFx.arrive): 1–2 товара с полок, нет нужного — похожее;
-     * платит у касс без хозяина. Они пробивают поток в своё время: к этой минуте дня — не больше autoCap × прошедшая
-     * доля (часть уходит на гостей зала у кассиров и киосков) и очередь на терпение гостя; не хватило — оставил корзину.
+     * Гость «на бегу» (traffic.ts quickPick, как в сцене trafficFx.arrive): 1-2 товара с полок, нет нужного - похожее;
+     * платит у касс без хозяина. Они пробивают поток в своё время: к этой минуте дня - не больше autoCap × прошедшая
+     * доля (часть уходит на гостей зала у кассиров и киосков) и очередь на терпение гостя; не хватило - оставил корзину.
      */
     const runQuick = () => {
       beforeGuest(false);
@@ -1277,7 +1277,7 @@ export function simulate({
       quickServed++;
       recordSale(stats, pick.cart);
     };
-    // Гости части дня (seconds — сколько она длится): count — в зал, quick — «на бегу», вперемешку ровно по времени.
+    // Гости части дня (seconds - сколько она длится): count - в зал, quick - «на бегу», вперемешку ровно по времени.
     const runGuests = (count: number, tolerance: number, cap: number, night: boolean, seconds: number, quick = 0) => {
     const total = count + quick;
     if (!total) stockTick(seconds);
@@ -1288,16 +1288,16 @@ export function simulate({
         continue;
       }
       if (!noThieves(state) && random() < thiefChance(state.level) * cameraTheft(state) * eyeTheft(state)) {
-        // Вор берёт товар; его ловит охранник или, реже, сам игрок — по повадкам (thiefTells.ts), за награду.
+        // Вор берёт товар; его ловит охранник или, реже, сам игрок - по повадкам (thiefTells.ts), за награду.
         const id = sellable[Math.floor(random() * sellable.length)];
         const index = shelfFor(state, id);
         const taken = index >= 0 ? takeFromShelf(state, index, id) : null;
         if (!taken) continue;
         const caught = random() < (guard ? guardCatchChance(guard) : ownerCatch(state));
         state = caught ? returnToShelf(taken.state, [{ id, unit: taken.unit }]) : taken.state;
-        // Награду за пойманного (thiefTells.ts OWNER_BOUNTY) симулятор не начисляет (13.11): это мелочь — десятки
-        // 💰 в день против тысяч выручки, — а лишние монеты сдвигают пороги покупок, и пороговые проверки
-        // баланса (tests/weeks, tests/balanceZar) уезжают от шума, а не от игры. Важное — доля пойманных — учтено.
+        // Награду за пойманного (thiefTells.ts OWNER_BOUNTY) симулятор не начисляет (13.11): это мелочь - десятки
+        // 💰 в день против тысяч выручки, - а лишние монеты сдвигают пороги покупок, и пороговые проверки
+        // баланса (tests/weeks, tests/balanceZar) уезжают от шума, а не от игры. Важное - доля пойманных - учтено.
         if (caught) stats.caught++;
         else stats.stolen += unitSalePrice(state, id, taken.unit);
         continue;
@@ -1390,7 +1390,7 @@ export function simulate({
         cookRounds--;
       }
     };
-    // Гости части дня (от доли start, длиной share; quick из них — «на бегу»): с поваром — по четвертям, между ними он готовит.
+    // Гости части дня (от доли start, длиной share; quick из них - «на бегу»): с поваром - по четвертям, между ними он готовит.
     const dayPart = (count: number, quick: number, start: number, share: number) => {
       const parts = chef ? Math.max(1, Math.round(share * 4)) : 1;
       let done = 0;

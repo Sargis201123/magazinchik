@@ -688,8 +688,8 @@ export function workerWait(scene: StoreScene, w: Worker, ms: number): Promise<vo
 }
 
 /**
- * Скорость сотрудника: его навык, менеджер на смене, а у грузчика — ещё оборудование склада и размер магазина
- * (game/loader.ts: 27.11 — в «Универмаге» вдвое быстрее, иначе полки пустели к обеду при полном складе).
+ * Скорость сотрудника: его навык, менеджер на смене, а у грузчика - ещё оборудование склада и размер магазина
+ * (game/loader.ts: 27.11 - в «Универмаге» вдвое быстрее, иначе полки пустели к обеду при полном складе).
  */
 export function workerPace(scene: StoreScene, w: Worker): number {
   return workSpeed(w.member) * managerBoost(scene.state) * (w.member.role === 'loader' ? loaderSpeed(scene.state) : 1);

@@ -23,8 +23,8 @@
 //   --port <номер>      порт своего сервера (по умолчанию 4173, занят — возьмёт следующий)
 //   DAY=134             другой игровой день в любом прогоне (погода и сезон по дню: снег 134, дождь 116, жара 163)
 //   FLOORSHOT=1         ещё прогоны flbare и flfull: все этажи открыты (голые / отделанные), кадр каждого этажа
-//   MEASURE=1           итоги дня цифрами (гости, почему ушли, ходки персонала); AUTO=1 — «Закупать сам», REG=4 — касс,
-//                       SHELF=0..3 — ступень всех полок, WH=0..3 — модель склада (0 — без тележки, 3 — автосклад)
+//   MEASURE=1           итоги дня цифрами (гости, почему ушли, ходки персонала); AUTO=1 - «Закупать сам», REG=4 - касс,
+//                       SHELF=0..3 - ступень всех полок, WH=0..3 - модель склада (0 - без тележки, 3 - автосклад)
 // Нужен Playwright с Chromium: npm i -D playwright && npx playwright install chromium
 // (свой Chromium — переменная CHROMIUM_PATH).
 
@@ -495,7 +495,7 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
       const per: Record<string, string> = {};
       for (const sh of st.shelves) for (const [k, v] of Object.entries(sh.items ?? {})) per[k] = String((Number(per[k]?.split('/')[0]) || 0) + (v as unknown[]).length);
       for (const [k, v] of Object.entries(st.warehouse ?? {})) per[k] = `${per[k] ?? 0}/${(v as unknown[]).length}`;
-      // Деньги к закрытию и подвоз «Закупать сам» за день (сколько раз и на сколько): быстрее разбирают — чаще подвоз.
+      // Деньги к закрытию и подвоз «Закупать сам» за день (сколько раз и на сколько): быстрее разбирают - чаще подвоз.
       const auto = st.autoOrder?.today ? { topUps: st.autoOrder.today.topUps, spent: st.autoOrder.today.spent } : null;
       return { came, missing: scene.stats.missing, per, fl, served, lost, revenue, lostWhy, work, quick, passed, quickQueue, shelves: st.shelves.reduce((n: number, sh: any) => n + count(sh.items), 0), warehouse: count(st.warehouse), money: st.money, auto };
     });

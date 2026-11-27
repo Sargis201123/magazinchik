@@ -987,7 +987,7 @@ export const nextStoreLevel = (state: StoreState): StoreLevel | undefined =>
 export const warehouseCapacity = (state: StoreState): number => levelWarehouse(state, storeLevel(state));
 /**
  * Склад помещения lvl у этого игрока: оборудование склада и холодильник в подвале переезжают вместе с ним.
- * 27.11: карточка «Развития» писала базу помещения («склад 230»), а у игрока с автоскладом — 368.
+ * 27.11: карточка «Развития» писала базу помещения («склад 230»), а у игрока с автоскладом - 368.
  */
 export const levelWarehouse = (state: StoreState, lvl: StoreLevel): number => Math.round(lvl.warehouse * (warehouseRoom(state) + coldRoom(state)));
 export const freeSlots = (state: StoreState): number => storeLevel(state).slots - state.shelves.filter((s) => !isFixture(s)).length;

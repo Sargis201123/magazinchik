@@ -25,7 +25,7 @@ describe('грузчик в большом магазине ходит быст�
     expect(loaderPace(s, loader)).toBeGreaterThan(loaderPace(shop({ level: 0, gear: { warehouse: 3 } }), loader));
   });
 
-  it('ходка по большому залу с новой скоростью — не дольше, чем по ларьку', () => {
+  it('ходка по большому залу с новой скоростью - не дольше, чем по ларьку', () => {
     // Путь растёт с помещением (5,6 с в ларьке → 9,8 с в «Универмаге»), скорость растёт быстрее.
     for (let level = 1; level < TRIP_SECONDS.length; level++) {
       const s = shop({ level });
@@ -46,7 +46,7 @@ describe('какую полку грузчик пополняет', () => {
     expect(shelfToFill(both)).toBe(1);
   });
 
-  it('почти полную полку не трогает, нести нечего — -1', () => {
+  it('почти полную полку не трогает, нести нечего - -1', () => {
     const full = shop({ level: 4, shelves: [drinks(11, 11)], warehouse: { water: units(30), juice: units(30) } });
     expect(shelfToFill(full)).toBe(-1);
     const empty = shop({ level: 4, shelves: [drinks(1, 1)], warehouse: {} });
@@ -58,7 +58,7 @@ describe('какую полку грузчик пополняет', () => {
   });
 });
 
-// Симулятор с пределом зала (hall: true) — это «Трафик v2»: зал + поток «на бегу», ходки грузчика по времени.
+// Симулятор с пределом зала (hall: true) - это «Трафик v2»: зал + поток «на бегу», ходки грузчика по времени.
 describe('симулятор: Трафик v2', () => {
   const runs = [1, 2, 3].map((seed) => simulate({ days: 60, seed, hall: true }));
   const days = runs.flatMap((r) => r.days);
@@ -66,7 +66,7 @@ describe('симулятор: Трафик v2', () => {
   it('сверх зала гости идут «на бегу», а не пропадают', () => {
     const big = days.filter((d) => d.level >= 2);
     expect(big.length).toBeGreaterThan(30);
-    // Касс без хозяина хватает — пробивают «на бегу» больше, чем проходит через зал.
+    // Касс без хозяина хватает - пробивают «на бегу» больше, чем проходит через зал.
     const quick = big.reduce((n, d) => n + d.quick, 0) / big.length;
     const served = big.reduce((n, d) => n + d.served, 0) / big.length;
     expect(quick).toBeGreaterThan(served / 3);
@@ -81,7 +81,7 @@ describe('симулятор: Трафик v2', () => {
     }
   });
 
-  it('грузчик делает ходки по времени, как в сцене: 5–40 за день, а не 60', () => {
+  it('грузчик делает ходки по времени, как в сцене: 5-40 за день, а не 60', () => {
     const withLoader = days.filter((d) => d.level >= 3);
     expect(withLoader.length).toBeGreaterThan(10);
     const trips = withLoader.reduce((n, d) => n + d.trips, 0) / withLoader.length;

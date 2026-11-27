@@ -117,7 +117,7 @@ async function tillLoop(scene: StoreScene, me: Phaser.GameObjects.Container, _bo
 }
 
 /**
- * Склад: как грузчик, только медленнее (а к концу учёбы — шустрее) — сам носит коробки туда, где пустеет. В большом
+ * Склад: как грузчик, только медленнее (а к концу учёбы - шустрее) - сам носит коробки туда, где пустеет. В большом
  * магазине, как и грузчик, ходит быстрее (game/loader.ts levelPace).
  */
 async function stockLoop(scene: StoreScene, me: Phaser.GameObjects.Container, box: Phaser.GameObjects.Image, alive: () => boolean): Promise<void> {
